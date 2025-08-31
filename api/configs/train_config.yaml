@@ -1,0 +1,82 @@
+seed: 42
+target: label_risk
+subject_id_col: subject_id
+required_columns:
+  - recording_id
+  - subject_id
+  - age
+  - sex
+  - site
+  - device_model
+  - psqi_c1
+  - psqi_c2
+  - psqi_c3
+  - psqi_c4
+  - psqi_c5
+  - psqi_c6
+  - psqi_c7
+  - psqi_global
+  - TST_min
+  - REM_total_min
+  - REM_latency_min
+  - REM_pct
+  - REM_density
+  - sleep_efficiency_pct
+  - micro_arousals_count
+  - mean_delta_pow
+  - mean_theta_pow
+  - mean_alpha_pow
+  - mean_beta_pow
+  - artifact_pct
+  - percent_epochs_missing
+  - label_risk
+
+numeric_features:
+  - age
+  - psqi_c1
+  - psqi_c2
+  - psqi_c3
+  - psqi_c4
+  - psqi_c5
+  - psqi_c6
+  - psqi_c7
+  - psqi_global
+  - TST_min
+  - REM_total_min
+  - REM_latency_min
+  - REM_pct
+  - REM_density
+  - sleep_efficiency_pct
+  - micro_arousals_count
+  - mean_delta_pow
+  - mean_theta_pow
+  - mean_alpha_pow
+  - mean_beta_pow
+  - artifact_pct
+  - percent_epochs_missing
+
+categorical_features:
+  - sex
+  - site
+  - device_model
+
+derived_features:
+  - psqi_rem_density_interaction
+  - age_REM_latency_ratio
+  - theta_alpha_ratio
+
+xgb_params:
+  objective: "multi:softprob"
+  num_class: 3
+  learning_rate: 0.05
+  max_depth: 5
+  n_estimators: 500
+  subsample: 0.9
+  colsample_bytree: 0.9
+  reg_alpha: 0.0
+  reg_lambda: 1.0
+  tree_method: "hist"
+  random_state: 42
+early_stopping_rounds: 30
+test_size: 0.15
+val_size: 0.15
