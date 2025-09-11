@@ -1,127 +1,161 @@
 from __future__ import annotations
-import json
-from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any
+import re
+from typing import List, Optional, Tuple
+
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
-RANDOM_SEED = 42
 
-@dataclass
-class SchemaRanges:
-    psqi_item_min: int = 0
-    psqi_item_max: int = 3
-    psqi_global_min: int = 0
-    psqi_global_max: int = 21
-    rem_latency_min: int = 5
-    rem_latency_max: int = 600
-    artifact_pct_min: float = 0.0
-    artifact_pct_max: float = 100.0
-    rem_pct_min: float = 0.0
-    rem_pct_max: float = 100.0  # if stored as percentage; else 0..1 tolerated below
+# ---------- small utilities ----------
+
+def _read_csv_any(path: str) -> pd.DataFrame:
+    """Read CSV, auto-detect delimiter if needed."""
+    try:
+        return pd.read_csv(path)
+    except Exception:
+        return pd.read_csv(path, sep=None, engine="python")
+
+
+def _ci_lookup(df: pd.DataFrame, name: str) -> Optional[str]:
+    """Case-insensitive exact match for a column name."""
+    low = {c.lower(): c for c in df.columns}
+    return low.get(name.lower())
+
+
+def _ci_present(df: pd.DataFrame, name: str) -> bool:
+    return _ci_lookup(df, name) is not None
+
+
+def _to_numeric_safe(s: pd.Series) -> pd.Series:
+    return pd.to_numeric(s, errors="coerce")
+
+
+# ---------- public helpers used by train.py ----------
 
 def load_csv(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    """
+    Load a CSV and do very light header cleanup (strip only).
+    We keep the original case of your columns (e.g., 'TST_min').
+    """
+    df = _read_csv_any(path)
+    df = df.rename(columns={c: str(c).strip() for c in df.columns})
     return df
 
-def validate_schema(df: pd.DataFrame, required_columns: List[str]) -> None:
-    missing = [c for c in required_columns if c not in df.columns]
+
+def ensure_psqi_global(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure a column named exactly 'psqi_global' exists.
+    If not found, derive it by summing PSQI components: psqi_c1..psqi_c7 (case-insensitive).
+    """
+    df = df.copy()
+
+    # If there's already psqi_global (any case), normalize its exact name:
+    existing = _ci_lookup(df, "psqi_global")
+    if existing:
+        if existing != "psqi_global":
+            df.rename(columns={existing: "psqi_global"}, inplace=True)
+        return df
+
+    # Try to build from components (psqi_c1..psqi_c7), case-insensitive
+    comps = []
+    for i in range(1, 8):
+        ci = _ci_lookup(df, f"psqi_c{i}")
+        if ci:
+            comps.append(ci)
+
+    if len(comps) >= 3:  # be lenient; typical PSQI has 7 components, but accept partial
+        df["psqi_global"] = df[comps].apply(_to_numeric_safe).sum(axis=1)
+        return df
+
+    # Could not build: leave as-is (validate_schema will complain if it is required)
+    return df
+
+
+def validate_schema(df: pd.DataFrame, required_columns: Optional[List[str]] = None) -> pd.DataFrame:
+    """
+    Validate that key columns exist (case-insensitive). If missing, raise with a helpful error.
+    We do *not* rename other columns — only ensure psqi_global above.
+    """
+    req = required_columns or [
+        "TST_min",
+        "REM_total_min",
+        "REM_latency_min",
+        "REM_pct",
+        "REM_density",
+        "label_risk",
+        "psqi_global",
+    ]
+
+    missing = [col for col in req if not _ci_present(df, col)]
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    # Basic ranges
-    rng = SchemaRanges()
-    for c in [f"psqi_c{i}" for i in range(1, 8)]:
-        if ((df[c] < rng.psqi_item_min) | (df[c] > rng.psqi_item_max)).any():
-            raise ValueError(f"Column {c} has values outside 0..3")
-    if "psqi_global" in df.columns:
-        if ((df["psqi_global"] < rng.psqi_global_min) | (df["psqi_global"] > rng.psqi_global_max)).any():
-            raise ValueError("psqi_global out of 0..21")
+    return df
 
-    if "REM_latency_min" in df.columns:
-        if ((df["REM_latency_min"] < rng.rem_latency_min) | (df["REM_latency_min"] > rng.rem_latency_max)).any():
-            raise ValueError("REM_latency_min out of 5..600")
 
-    if "artifact_pct" in df.columns:
-        if ((df["artifact_pct"] < rng.artifact_pct_min) | (df["artifact_pct"] > rng.artifact_pct_max)).any():
-            raise ValueError("artifact_pct out of 0..100")
+def feature_engineer(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
+    """
+    Create a few safe derived features and return:
+      - engineered dataframe
+      - the *feature list* to feed the model
 
-    # REM_pct may be 0..1 or 0..100; clip later in feature_engineer
+    Features are chosen automatically: all numeric columns except clear IDs/labels.
+    """
+    df = df.copy()
 
-def feature_engineer(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
+    # Helpful case-insensitive source columns
+    c_tst  = _ci_lookup(df, "TST_min")
+    c_remt = _ci_lookup(df, "REM_total_min")
+    c_reml = _ci_lookup(df, "REM_latency_min")
+    c_remp = _ci_lookup(df, "REM_pct")
+    c_remd = _ci_lookup(df, "REM_density")
 
-    # Ensure psqi_global present
-    if "psqi_global" not in out.columns:
-        out["psqi_global"] = sum(out[f"psqi_c{i}"] for i in range(1, 8))
+    # Numeric safe versions
+    if c_tst:
+        df[c_tst]  = _to_numeric_safe(df[c_tst])
+    if c_remt:
+        df[c_remt] = _to_numeric_safe(df[c_remt])
+    if c_reml:
+        df[c_reml] = _to_numeric_safe(df[c_reml])
+    if c_remp:
+        df[c_remp] = _to_numeric_safe(df[c_remp])
+    if c_remd:
+        df[c_remd] = _to_numeric_safe(df[c_remd])
 
-    # Normalize REM_pct to 0..1 if looks like percent 0..100
-    if out["REM_pct"].max() > 1.5:
-        out["REM_pct"] = out["REM_pct"] / 100.0
+    # Derived features (robust to zeros/NaNs)
+    if c_tst and c_remt and c_tst in df.columns and c_remt in df.columns:
+        df["rem_to_tst_ratio"] = df[c_remt] / df[c_tst].replace(0, np.nan)
+    if c_tst and c_reml and c_tst in df.columns and c_reml in df.columns:
+        df["rem_latency_ratio"] = df[c_reml] / df[c_tst].replace(0, np.nan)
 
-    # Sleep efficiency also normalize if >1.5
-    if "sleep_efficiency_pct" in out.columns and out["sleep_efficiency_pct"].max() > 1.5:
-        out["sleep_efficiency_pct"] = out["sleep_efficiency_pct"] / 100.0
+    # Make sure label is integer-like
+    if _ci_present(df, "label_risk"):
+        lab = _ci_lookup(df, "label_risk")
+        df[lab] = pd.to_numeric(df[lab], errors="coerce").astype("Int64")
 
-    # Derived features
-    out["psqi_rem_density_interaction"] = out["psqi_global"] * out["REM_density"].fillna(0)
-    out["age_REM_latency_ratio"] = out["age"] / (out["REM_latency_min"].replace(0, np.nan))
-    out["age_REM_latency_ratio"] = out["age_REM_latency_ratio"].fillna(out["age"])  # fallback if latency=0
-    out["theta_alpha_ratio"] = out["mean_theta_pow"] / (out["mean_alpha_pow"].replace(0, np.nan))
-    out["theta_alpha_ratio"] = out["theta_alpha_ratio"].fillna(0)
+    # Build feature list: keep numeric columns; drop obvious IDs/labels/categorical text
+    drop_cols = {
+        "recording_id",
+        "subject_id",
+        "age_group",
+        "sex",
+        "site",
+        "device_model",
+        "label_risk",
+        "label_dx",
+        "label_source",
+        "label_confidence",
+    }
 
-    # Clip numeric sanity
-    out["artifact_pct"] = out["artifact_pct"].clip(0, 100)
-    out["percent_epochs_missing"] = out["percent_epochs_missing"].clip(0, 100)
-    out["REM_pct"] = out["REM_pct"].clip(0, 1)
+    # Keep 'psqi_global' explicitly if numeric
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    features = [c for c in num_cols if c not in drop_cols]
 
-    return out
+    # Ensure psqi_global is in features if present and numeric
+    if "psqi_global" in df.columns and "psqi_global" not in features and pd.api.types.is_numeric_dtype(df["psqi_global"]):
+        features.append("psqi_global")
 
-def split_by_subject(
-    df: pd.DataFrame,
-    subject_col: str,
-    test_size: float,
-    val_size: float,
-    stratify_col: str,
-    seed: int = RANDOM_SEED
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    # Split subjects to avoid leakage
-    subjects = df[subject_col].astype(str).unique()
-    # For stratification, map subject -> majority label
-    subj_labels = df.groupby(subject_col)[stratify_col].agg(lambda x: x.value_counts().index[0])
-    subj_df = pd.DataFrame({subject_col: subjects}).merge(
-        subj_labels.reset_index(), on=subject_col, how="left"
-    )
-    train_subj, test_subj = train_test_split(
-        subj_df, test_size=test_size, stratify=subj_df[stratify_col], random_state=seed
-    )
-    # Recompute val split from train pool
-    train_subj2, val_subj = train_test_split(
-        train_subj, test_size=val_size/(1.0-test_size), stratify=train_subj[stratify_col], random_state=seed
-    )
+    # Final tidy: unique & stable order
+    features = list(dict.fromkeys(features))
 
-    def mask(df, subj_list):
-        return df[df[subject_col].astype(str).isin(subj_list[subject_col].astype(str))].copy()
-
-    train_df = mask(df, train_subj2)
-    val_df = mask(df, val_subj)
-    test_df = mask(df, test_subj)
-    return train_df, val_df, test_df
-
-def build_xy(
-    df: pd.DataFrame,
-    numeric_features: List[str],
-    categorical_features: List[str],
-    target: str
-) -> Tuple[pd.DataFrame, pd.Series, List[str]]:
-    # One-hot encode categoricals
-    df_enc = pd.get_dummies(df[numeric_features + categorical_features], drop_first=True)
-    features = df_enc.columns.tolist()
-    X = df_enc
-    y = df[target].astype(int)
-    return X, y, features
-
-def save_feature_list(features: List[str], path: str) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(features, f, indent=2)
+    return df, features

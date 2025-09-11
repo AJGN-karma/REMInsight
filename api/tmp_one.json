@@ -1,0 +1,18 @@
+[
+  {
+    "TST_min": 420,
+    "REM_total_min": 95,
+    "REM_latency_min": 80,
+    "REM_pct": 22.6,
+    "REM_density": 0.9,
+    "psqi_global": 7,
+    "sleep_efficiency_pct": 90,
+    "micro_arousals_count": 12,
+    "mean_delta_pow": 0.8,
+    "mean_theta_pow": 1.2,
+    "mean_alpha_pow": 0.6,
+    "mean_beta_pow": 0.4,
+    "artifact_pct": 2.0,
+    "percent_epochs_missing": 0.0
+  }
+]

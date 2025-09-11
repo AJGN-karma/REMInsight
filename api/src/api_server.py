@@ -1,96 +1,73 @@
 from __future__ import annotations
-import json, os
-from typing import Any, Dict, Optional
+import json
+from pathlib import Path
+from typing import List, Optional, Any, Dict
 
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+import numpy as np
+import pandas as pd
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import pandas as pd
+from joblib import load
 
-from .infer import load_artifacts, prepare_X_from_features, scale_numeric, predict_single
-from .shap_explain import topk_shap
+# ---------- config ----------
+MODEL_DIR = Path(__file__).resolve().parent.parent / "models"  # ../models
+MODEL_PATH = MODEL_DIR / "xgb_model.joblib"
+IMP_PATH   = MODEL_DIR / "imputer.joblib"
+SCL_PATH   = MODEL_DIR / "scaler.joblib"
+FEAT_PATH  = MODEL_DIR / "features.json"
 
-MODEL_PATH = os.getenv("MODEL_PATH", "models/xgb_model.joblib")
-SCALER_PATH = os.getenv("SCALER_PATH", "models/scaler.joblib")
-FEATURE_LIST_PATH = os.getenv("FEATURE_LIST_PATH", "models/feature_list.json")
-API_TOKEN = os.getenv("API_TOKEN")
-
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    # add your Vercel domain:
-    "https://reminsight.vercel.app"
-]
+# ---------- load artifacts at startup ----------
+model = load(MODEL_PATH)
+imputer = load(IMP_PATH)
+scaler = load(SCL_PATH)
+features: List[str] = json.loads(FEAT_PATH.read_text(encoding="utf-8"))
 
 app = FastAPI(title="REMInsight API", version="1.0.0")
+
+# CORS for local dev and hosted frontends
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],  # tighten in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load model at startup
-model, scaler, feature_list = load_artifacts(MODEL_PATH, SCALER_PATH, FEATURE_LIST_PATH)
-numeric_prefixes = [
-    "age","psqi_c1","psqi_c2","psqi_c3","psqi_c4","psqi_c5","psqi_c6","psqi_c7","psqi_global",
-    "TST_min","REM_total_min","REM_latency_min","REM_pct","REM_density","sleep_efficiency_pct",
-    "micro_arousals_count","mean_delta_pow","mean_theta_pow","mean_alpha_pow","mean_beta_pow",
-    "artifact_pct","percent_epochs_missing","psqi_rem_density_interaction","age_REM_latency_ratio","theta_alpha_ratio"
-]
-
-def auth_dep(token: Optional[str] = None):
-    # Simple token stub: accept Authorization: Bearer <token> via FastAPI security normally,
-    # here we just check the header through app dependencies.
-    # In production replace with Firebase Admin verification if desired.
-    return True
-
 class PredictRequest(BaseModel):
-    features: Dict[str, Any]
+    # One or more rows; keys should be column names used in training.
+    rows: List[Dict[str, Any]]
+
+class PredictResponseRow(BaseModel):
+    pred_risk: int
+    probs: List[float]
+
+class PredictResponse(BaseModel):
+    results: List[PredictResponseRow]
+    features_used: List[str]
 
 @app.get("/health")
 def health():
-    return {"status":"ok","model_path":MODEL_PATH}
+    return {"status": "ok", "features": len(features)}
 
-@app.post("/predict")
-def predict(req: PredictRequest, explain: bool = False):
-    # Optional API_TOKEN check
-    # For quick start we skip; uncomment lines below to enforce:
-    # auth = os.getenv("API_TOKEN")
-    # if auth and request.headers.get("Authorization") != f"Bearer {auth}":
-    #     raise HTTPException(status_code=401, detail="Unauthorized")
+@app.post("/predict", response_model=PredictResponse)
+def predict(req: PredictRequest):
+    if not req.rows:
+        return {"results": [], "features_used": features}
+    df = pd.DataFrame(req.rows)
 
-    feats = req.features
-    X = prepare_X_from_features(feats, feature_list)
-    X = scale_numeric(X, scaler, numeric_prefixes)
-    pred, proba, conf = predict_single(model, X)
-    out = {"prediction": pred, "probabilities": proba, "label_confidence": conf}
-    if explain:
-        out["explanation"] = {"top5": topk_shap(model, X, 5)}
-    return out
+    # enforce feature order; missing features -> NaN
+    X = df.reindex(columns=features, fill_value=np.nan).values
+    X_imp = imputer.transform(X)
+    X_scl = scaler.transform(X_imp)
 
-@app.post("/extract_and_predict")
-async def extract_and_predict(file: UploadFile = File(...), explain: bool = False):
-    # Accept CSV or JSON containing either full features row or raw signals (demo = features row)
-    if file.filename.lower().endswith(".csv"):
-        df = pd.read_csv(file.file)
-        row = df.iloc[0].to_dict()
-    elif file.filename.lower().endswith(".json"):
-        data = json.loads((await file.read()).decode("utf-8"))
-        if isinstance(data, dict):
-            row = data
-        elif isinstance(data, list):
-            row = data[0]
-        else:
-            raise HTTPException(status_code=400, detail="Invalid JSON")
-    else:
-        raise HTTPException(status_code=415, detail="Only CSV or JSON supported in this demo")
+    probs = model.predict_proba(X_scl)
+    preds = probs.argmax(axis=1)
 
-    X = prepare_X_from_features(row, feature_list)
-    X = scale_numeric(X, scaler, numeric_prefixes)
-    pred, proba, conf = predict_single(model, X)
-    out = {"prediction": pred, "probabilities": proba, "label_confidence": conf, "features_used": row}
-    if explain:
-        out["explanation"] = {"top5": topk_shap(model, X, 5)}
-    return out
+    results = []
+    for i in range(len(df)):
+        results.append(PredictResponseRow(
+            pred_risk=int(preds[i]),
+            probs=[float(x) for x in probs[i]]
+        ))
+    return PredictResponse(results=results, features_used=features)

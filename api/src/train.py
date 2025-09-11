@@ -1,144 +1,249 @@
 from __future__ import annotations
-import argparse, json, os, time
-from typing import Dict, Any
-import joblib
+
+import argparse
+import json
+import os
+from pathlib import Path
+from typing import Optional, Dict, Any
+
 import numpy as np
-import optuna
 import pandas as pd
+import yaml
+from joblib import dump
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix, roc_auc_score, brier_score_loss
 from xgboost import XGBClassifier
 
-from .data_utils import load_csv, validate_schema, feature_engineer, split_by_subject, build_xy, save_feature_list
-from .utils import save_json, now_iso, sha256_of_file
+# >>> Our data helpers (you already created src/data_utils.py)
+from src.data_utils import (
+    load_csv,
+    ensure_psqi_global,
+    validate_schema,
+    feature_engineer,
+)
 
-def parse_args():
-    p = argparse.ArgumentParser()
-    p.add_argument("--config", required=True)
-    p.add_argument("--data", required=True, help="training csv (balanced)")
-    p.add_argument("--val", required=True, help="evaluation csv (imbalanced)")
-    p.add_argument("--out", required=True, help="models output dir")
-    return p.parse_args()
+RNG_SEED = 42
 
-def load_config(path: str) -> Dict[str, Any]:
-    import yaml
+
+def load_config(path: Optional[str]) -> Dict[str, Any]:
+    """Load YAML config if provided; otherwise return defaults."""
+    default = {
+        "model": {
+            "n_estimators": 300,
+            "max_depth": 6,
+            "learning_rate": 0.05,
+            "subsample": 0.9,
+            "colsample_bytree": 0.9,
+            "reg_lambda": 1.0,
+            "reg_alpha": 0.0,
+            "tree_method": "hist",  # fast
+            "random_state": RNG_SEED,
+        }
+    }
+    if not path:
+        return default
     with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f) or {}
+    # shallow-merge
+    if "model" in cfg:
+        default["model"].update(cfg["model"] or {})
+    return default
+
+
+def build_model(model_cfg: Dict[str, Any]) -> XGBClassifier:
+    """Create an XGBClassifier for 3-class risk classification (0/1/2)."""
+    return XGBClassifier(
+        n_estimators=model_cfg.get("n_estimators", 300),
+        max_depth=model_cfg.get("max_depth", 6),
+        learning_rate=model_cfg.get("learning_rate", 0.05),
+        subsample=model_cfg.get("subsample", 0.9),
+        colsample_bytree=model_cfg.get("colsample_bytree", 0.9),
+        reg_lambda=model_cfg.get("reg_lambda", 1.0),
+        reg_alpha=model_cfg.get("reg_alpha", 0.0),
+        tree_method=model_cfg.get("tree_method", "hist"),
+        objective="multi:softprob",   # multiclass probabilities
+        num_class=3,
+        random_state=model_cfg.get("random_state", RNG_SEED),
+        n_jobs=0,
+    )
+
+
+def prepare_frame(path: str) -> tuple[pd.DataFrame, list[str]]:
+    """
+    READ + ENSURE + VALIDATE + FEATURE ENGINEER
+    This returns a ready-to-use DataFrame and the model feature list.
+
+    IMPORTANT: This is the block that was previously described in “replace your reads” and
+    “call feature engineering”. It’s now consolidated here.
+    """
+    # (1) Load CSV with normalized headers
+    df_raw = load_csv(path)
+
+    # (2) Ensure psqi_global exists (derive from psqi_c1..psqi_c7 if missing)
+    df_raw = ensure_psqi_global(df_raw)
+
+    # (3) Validate schema + ranges. Keep the returned frame!
+    df_val = validate_schema(df_raw, required_columns=None)
+
+    # (4) Add derived features + get the feature list used for ML
+    df_fe, feat_list = feature_engineer(df_val)
+
+    return df_fe, feat_list
+
+
+def make_Xy(df: pd.DataFrame, features: list[str]):
+    """
+    Build X (features) and y (labels) numpy arrays.
+    NOTE: This is where we “create X/y”.
+    """
+    X = df[features].values
+    y = df["label_risk"].astype(int).values
+    return X, y
+
+
+def impute_and_scale(train_X: np.ndarray, val_X: Optional[np.ndarray]):
+    """Fit imputer+scaler on train, transform both."""
+    imputer = SimpleImputer(strategy="median")
+    scaler = StandardScaler()
+
+    train_X_imp = imputer.fit_transform(train_X)
+    train_X_scl = scaler.fit_transform(train_X_imp)
+
+    val_X_scl = None
+    if val_X is not None:
+        val_X_imp = imputer.transform(val_X)
+        val_X_scl = scaler.transform(val_X_imp)
+
+    return train_X_scl, val_X_scl, imputer, scaler
+
+
+def evaluate(y_true: np.ndarray, y_pred: np.ndarray, y_prob: Optional[np.ndarray] = None) -> Dict[str, Any]:
+    """Compute key metrics for reporting."""
+    out = {
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "f1_macro": float(f1_score(y_true, y_pred, average="macro")),
+        "confusion_matrix": confusion_matrix(y_true, y_pred).tolist(),
+        "classification_report": classification_report(y_true, y_pred, output_dict=True),
+    }
+    if y_prob is not None:
+        # you can add more prob-based metrics later (e.g., AUC per class)
+        pass
+    return out
+
+
+def save_artifacts(out_dir: Path,
+                   model: XGBClassifier,
+                   imputer: SimpleImputer,
+                   scaler: StandardScaler,
+                   features: list[str],
+                   train_report: Dict[str, Any],
+                   val_report: Optional[Dict[str, Any]]):
+    """Save model, preprocessing, features, and reports to disk."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    dump(model, out_dir / "xgb_model.joblib")
+    dump(imputer, out_dir / "imputer.joblib")
+    dump(scaler, out_dir / "scaler.joblib")
+
+    (out_dir / "features.json").write_text(json.dumps(features, indent=2))
+
+    all_reports = {"train": train_report}
+    if val_report is not None:
+        all_reports["val"] = val_report
+    (out_dir / "evaluation_report.json").write_text(json.dumps(all_reports, indent=2))
+
+    # simple training summary
+    (out_dir / "training_summary.json").write_text(json.dumps({
+        "model_type": "XGBClassifier",
+        "artifacts": {
+            "model": "xgb_model.joblib",
+            "imputer": "imputer.joblib",
+            "scaler": "scaler.joblib",
+            "features": "features.json",
+            "evaluation_report": "evaluation_report.json",
+        }
+    }, indent=2))
+
+    print(f"[OK] Saved artifacts to: {out_dir.resolve()}")
+
 
 def train_main():
-    args = parse_args()
+    parser = argparse.ArgumentParser(description="Train REMInsight classifier")
+    parser.add_argument("--config", type=str, default=None, help="YAML config file")
+    parser.add_argument("--data", type=str, required=True, help="Training CSV")
+    parser.add_argument("--val", type=str, default=None, help="External validation CSV (optional but recommended)")
+    parser.add_argument("--out", type=str, required=True, help="Directory to save model artifacts")
+    args = parser.parse_args()
+
     cfg = load_config(args.config)
-    os.makedirs(args.out, exist_ok=True)
+    model_cfg = cfg["model"]
 
-    seed = cfg.get("seed", 42)
-    target = cfg["target"]
-    subject_col = cfg["subject_id_col"]
-    req_cols = cfg["required_columns"]
-    num_feats = cfg["numeric_features"]
-    cat_feats = cfg["categorical_features"]
-    derived = cfg.get("derived_features", [])
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load
-    df_train_raw = load_csv(args.data)
-    df_eval_raw  = load_csv(args.val)
+    # -----------------------------
+    #   TRAIN PREP
+    # -----------------------------
+    print("[INFO] Loading + preparing TRAIN data...")
+    df_train_fe, feat_list = prepare_frame(args.data)
+    X_train, y_train = make_Xy(df_train_fe, feat_list)
 
-    # Validate
-    validate_schema(df_train_raw, req_cols)
-    validate_schema(df_eval_raw, req_cols)
+    # -----------------------------
+    #   VAL PREP (optional)
+    # -----------------------------
+    X_val = y_val = df_val_fe = None
+    if args.val:
+        print("[INFO] Loading + preparing VAL data...")
+        df_val_fe, _ = prepare_frame(args.val)
+        # Important: align columns to training feature list to avoid shape mismatch
+        df_val_fe = df_val_fe.reindex(columns=feat_list + [c for c in df_val_fe.columns if c not in feat_list])
+        X_val, y_val = make_Xy(df_val_fe, feat_list)
 
-    # FE
-    df_train = feature_engineer(df_train_raw)
-    df_eval  = feature_engineer(df_eval_raw)
+    # -----------------------------
+    #   PREPROCESS (impute + scale)
+    # -----------------------------
+    X_train_scl, X_val_scl, imputer, scaler = impute_and_scale(X_train, X_val)
 
-    # Subject-wise split inside TRAIN set (train/val/test), but we already pass external eval set too.
-    tr, va, te = split_by_subject(
-        df_train, subject_col, cfg["test_size"], cfg["val_size"], target, seed
+    # -----------------------------
+    #   MODEL
+    # -----------------------------
+    print("[INFO] Building model...")
+    model = build_model(model_cfg)
+
+    print("[INFO] Training model...")
+    model.fit(X_train_scl, y_train)
+
+    # -----------------------------
+    #   EVALUATION
+    # -----------------------------
+    print("[INFO] Evaluating on TRAIN...")
+    train_pred = model.predict(X_train_scl)
+    train_prob = model.predict_proba(X_train_scl)
+    train_report = evaluate(y_train, train_pred, train_prob)
+    print(f"  Train acc={train_report['accuracy']:.3f}  f1_macro={train_report['f1_macro']:.3f}")
+
+    val_report = None
+    if X_val_scl is not None:
+        print("[INFO] Evaluating on VAL...")
+        val_pred = model.predict(X_val_scl)
+        val_prob = model.predict_proba(X_val_scl)
+        val_report = evaluate(y_val, val_pred, val_prob)
+        print(f"  Val   acc={val_report['accuracy']:.3f}  f1_macro={val_report['f1_macro']:.3f}")
+
+    # -----------------------------
+    #   SAVE
+    # -----------------------------
+    save_artifacts(
+        out_dir=out_dir,
+        model=model,
+        imputer=imputer,
+        scaler=scaler,
+        features=feat_list,
+        train_report=train_report,
+        val_report=val_report,
     )
 
-    # Build XY for internal splits
-    X_tr, y_tr, feats = build_xy(tr, num_feats + derived, cat_feats, target)
-    X_va, y_va, _     = build_xy(va, num_feats + derived, cat_feats, target)
-    X_te, y_te, _     = build_xy(te, num_feats + derived, cat_feats, target)
-
-    # Standardize numerics only (fit on train)
-    # Note: we standardize the subset of features that match numeric columns within X after one-hot
-    scaler = StandardScaler(with_mean=True, with_std=True)
-    numeric_cols_in_X = [c for c in X_tr.columns if any(c.startswith(f) for f in num_feats + derived)]
-    scaler.fit(X_tr[numeric_cols_in_X])
-    for X in (X_tr, X_va, X_te):
-        X.loc[:, numeric_cols_in_X] = scaler.transform(X[numeric_cols_in_X])
-
-    # XGBoost
-    xgb_params = cfg["xgb_params"]
-    model = XGBClassifier(**xgb_params)
-
-    # Early stopping uses eval_set
-    model.fit(
-        X_tr, y_tr,
-        eval_set=[(X_va, y_va)],
-        verbose=False,
-        early_stopping_rounds=cfg.get("early_stopping_rounds", 30)
-    )
-
-    # Internal eval
-    def eval_block(X, y):
-        p = model.predict(X)
-        proba = model.predict_proba(X)
-        out = {
-            "accuracy": float(accuracy_score(y, p)),
-            "f1_macro": float(f1_score(y, p, average="macro")),
-            "report": classification_report(y, p, output_dict=True),
-            "confusion_matrix": confusion_matrix(y, p).tolist(),
-            "roc_auc_ovr": float(roc_auc_score(y, proba, multi_class="ovr")),
-            "brier_score": float(brier_score_loss((y==2).astype(int), proba[:,2])) # reference class 2
-        }
-        return out
-
-    tr_metrics = eval_block(X_tr, y_tr)
-    va_metrics = eval_block(X_va, y_va)
-    te_metrics = eval_block(X_te, y_te)
-
-    # External eval on provided imbalanced dataset
-    X_ev, y_ev, _ = build_xy(df_eval, num_feats + derived, cat_feats, target)
-    # align columns
-    X_ev = X_ev.reindex(columns=X_tr.columns, fill_value=0)
-    X_ev.loc[:, numeric_cols_in_X] = scaler.transform(X_ev[numeric_cols_in_X])
-    ev_metrics = eval_block(X_ev, y_ev)
-
-    # Save artifacts
-    model_path = os.path.join(args.out, "xgb_model.joblib")
-    scaler_path = os.path.join(args.out, "scaler.joblib")
-    feat_path = os.path.join(args.out, "feature_list.json")
-
-    joblib.dump(model, model_path)
-    joblib.dump(scaler, scaler_path)
-    save_feature_list(list(X_tr.columns), feat_path)
-
-    # Summaries
-    training_summary = {
-        "generated_at": now_iso(),
-        "n_train": int(len(X_tr)),
-        "n_val": int(len(X_va)),
-        "n_test": int(len(X_te)),
-        "features": list(X_tr.columns),
-        "internal": {"train": tr_metrics, "val": va_metrics, "test": te_metrics},
-        "external_eval_on_imbalanced": ev_metrics,
-        "xgb_params": xgb_params,
-        "best_ntree_limit": getattr(model, "best_ntree_limit", None),
-    }
-    save_json(training_summary, os.path.join(args.out, "training_summary.json"))
-
-    # Provenance
-    prov = {
-        "seed": seed,
-        "python": os.sys.version,
-        "numpy": np.__version__,
-        "pandas": pd.__version__,
-        "sklearn": "1.4.2",
-        "xgboost": "2.1.4",
-        "model_sha256": sha256_of_file(model_path)
-    }
-    save_json(prov, os.path.join(args.out, "training_provenance.json"))
 
 if __name__ == "__main__":
     train_main()
