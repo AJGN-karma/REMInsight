@@ -11,6 +11,14 @@ from pydantic import BaseModel
 from joblib import load
 import os
 from fastapi.middleware.cors import CORSMiddleware
+import os
+from pathlib import Path
+
+# before
+MODEL_DIR = Path("./models")
+
+# after
+MODEL_DIR = Path(os.getenv("MODEL_DIR", "./models"))
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
