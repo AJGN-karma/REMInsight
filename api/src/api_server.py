@@ -13,6 +13,35 @@ import os
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from pathlib import Path
+# api/src/api_server.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI(
+    title="REMInsight API",
+    version="1.0.0",
+)
+
+# CORS (adjust origins if needed)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---- routes ----
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+# if you have a router, include it AFTER app is created
+# from .routes import router
+# app.include_router(router, prefix="/api")
+
+__all__ = ["app"]
+
 
 # before
 MODEL_DIR = Path("./models")
