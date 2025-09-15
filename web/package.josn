@@ -1,0 +1,28 @@
+
+@'
+{
+  "name": "reminsight-web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.10",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "axios": "1.7.7"
+  },
+  "devDependencies": {
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.10",
+    "typescript": "5.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
+'@ | Set-Content -Encoding utf8 package.json
