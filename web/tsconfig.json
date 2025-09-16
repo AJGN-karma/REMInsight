@@ -1,17 +1,18 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
+    "lib": ["dom", "dom.iterable", "es2020"],
+    "allowJs": false,
     "skipLibCheck": true,
-    "jsx": "react-jsx",
-    "moduleResolution": "Bundler",
-    "allowJs": true,
+    "strict": true,
     "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "strict": true
+    "jsx": "preserve",
+    "incremental": true
   },
-  "include": ["src"]
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
 }
