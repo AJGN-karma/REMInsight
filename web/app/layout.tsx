@@ -1,3 +1,4 @@
+
 // web/app/layout.tsx
 export const metadata = {
   title: "REMInsight",
