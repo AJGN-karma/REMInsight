@@ -1,6 +1,7 @@
+// web/app/layout.tsx
 export const metadata = {
   title: "REMInsight",
-  description: "Sleep analytics front-end for REMInsight API"
+  description: "Sleep analytics front-end for REMInsight API",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
