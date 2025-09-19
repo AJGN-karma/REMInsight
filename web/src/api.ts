@@ -1,10 +1,12 @@
 // web/src/api.ts
+// Next.js reads public env vars from process.env.NEXT_PUBLIC_*
 
-// Read API base from Next.js runtime env (set in Vercel as NEXT_PUBLIC_API_BASE)
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE as string;
+export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE as string) || "";
 
 if (!API_BASE) {
-  throw new Error("NEXT_PUBLIC_API_BASE is not set. Add it in Vercel → Project → Settings → Environment Variables.");
+  throw new Error(
+    "NEXT_PUBLIC_API_BASE is not set. In Vercel → Project → Settings → Environment Variables, add NEXT_PUBLIC_API_BASE=https://reminsight.onrender.com"
+  );
 }
 
 export async function predict(
@@ -16,15 +18,14 @@ export async function predict(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify([features]),
-    // ensure no caching of API responses
-    cache: "no-store"
+    cache: "no-store",
   });
 
   if (!res.ok) {
-    const txt = await res.text();
+    const txt = await res.text().catch(() => "");
     throw new Error(`Predict failed: ${res.status} ${txt}`);
   }
   return res.json();
