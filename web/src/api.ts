@@ -1,9 +1,5 @@
-// web/src/api.ts
-// Use Next.js public env variables from Vercel (NOT import.meta.*)
-
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE as string;
 
-// ---- API helpers ----
 export async function predict(
   features: Record<string, any>,
   explain = true,
@@ -19,16 +15,14 @@ export async function predict(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
-    body: JSON.stringify(features),
-    // Next.js on Vercel: no credentials by default
+    body: JSON.stringify(features)
   });
 
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`API error ${res.status}: ${txt || res.statusText}`);
   }
-
   return res.json();
 }
