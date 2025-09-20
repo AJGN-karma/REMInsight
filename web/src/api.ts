@@ -1,5 +1,6 @@
 // web/src/api.ts
 // Use Next.js public env variables from Vercel (NOT import.meta.*)
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE as string) || "";
 
