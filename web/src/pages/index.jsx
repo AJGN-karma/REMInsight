@@ -31,7 +31,7 @@ export default function Home() {
 
     try {
       const res = await predict(cleaned);
-      setResult(res[0]);
+      setResult(res[0]); // API returns an array
     } catch (err) {
       console.error(err);
       alert("Prediction failed. Check console.");
@@ -51,7 +51,7 @@ export default function Home() {
             name={k}
             value={features[k]}
             onChange={handleChange}
-            style={{ padding: "4px", width: "200px" }}
+            style={{ padding: "4px", width: "220px" }}
           />
         </div>
       ))}
