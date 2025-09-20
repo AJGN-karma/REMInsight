@@ -1,6 +1,7 @@
 // web/src/auth.ts
 // Client-only Firebase init for Next.js
 
+
 "use client";
 
 import { initializeApp, getApps } from "firebase/app";
