@@ -3,6 +3,7 @@
 
 export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE as string) || "";
 
+
 if (!API_BASE) {
   throw new Error(
     "NEXT_PUBLIC_API_BASE is not set. In Vercel → Project → Settings → Environment Variables, add NEXT_PUBLIC_API_BASE=https://reminsight.onrender.com"
