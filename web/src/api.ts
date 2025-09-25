@@ -1,31 +1,22 @@
 // web/src/api.ts
-export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE as string) || "";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE as string;
 
-type PredictResponse = {
-  risk: number;
-  probs?: number[];
-  explain?: any;
-};
+type Row = Record<string, any>;
 
-export async function predict(
-  features: Record<string, any>,
-  explain = true,
-  token?: string
-): Promise<PredictResponse> {
-  if (!API_BASE) throw new Error("API base not configured");
-
-  const res = await fetch(`${API_BASE}/predict?explain=${String(explain)}`, {
+export async function predict(rows: Row[]) {
+  const res = await fetch(`${API_BASE}/predict`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(features),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows }),
   });
-
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${res.status}: ${text}`);
+    const txt = await res.text();
+    throw new Error(`API error ${res.status}: ${txt}`);
   }
+  return res.json(); // { results: [{pred_risk, probs:[...]}], features_used: [...] }
+}
+
+export async function health() {
+  const res = await fetch(`${API_BASE}/health`);
   return res.json();
 }
