@@ -1,14 +1,8 @@
-import React, { useState } from "react";
-import { predict } from "../api";
-
- if it already looks like this, keep it
-import { health } from "../api";
+import React, { useState, useRef, useEffect } from "react";
+import { predict, health } from "../api";
 
 
-// If it had something else (like "../api.js" or a path to lib), replace it with:
 
-
-// The feature keys must match what your backend's model expects (features.json)
 const INITIAL = {
   TST_min: "",
   REM_total_min: "",
