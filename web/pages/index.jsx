@@ -2,10 +2,11 @@
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import { apiHealth, predict } from "../lib/api";
+import DataCollection from "../src/components/DataCollection";
+// (and any others like PersonalInfoForm, ResultsDashboard, etc.)
 
 // Your components
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
-import DataCollection from "../src/components/DataCollection";
 import ResultsDashboard from "../src/components/ResultsDashboard";
 
 export default function Home() {
