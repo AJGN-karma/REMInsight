@@ -22,3 +22,4 @@ export async function predict(rows: Array<Record<string, any>>) {
   }
   return res.json();
 }
+
