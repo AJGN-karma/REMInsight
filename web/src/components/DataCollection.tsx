@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from "react";
-import { predict, health } from "../api";
+import React, { useEffect, useRef, useState } from "react";
+import { predict, health } from "../api";   // <= from src/components to src/api is "../api"
 
 
 
