@@ -7,7 +7,6 @@ export async function pingHealth() {
 }
 
 
-
 type PredictRow = {
   TST_min: number;
   REM_total_min: number;
