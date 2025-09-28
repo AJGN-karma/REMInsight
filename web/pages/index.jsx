@@ -1,12 +1,12 @@
 // web/pages/index.jsx
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
+
+// ✅ Import API helpers (must exist in web/lib/api.ts)
 import { apiHealth, predict } from "../lib/api";
+
+// ✅ Import UI components
 import DataCollection from "../src/components/DataCollection";
-// (and any others like PersonalInfoForm, ResultsDashboard, etc.)
-
-
-// Your components
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
 import ResultsDashboard from "../src/components/ResultsDashboard";
 
@@ -30,22 +30,19 @@ export default function Home() {
     })();
   }, []);
 
-  // Called by PersonalInfoForm when saved
+  // When personal info saved
   const onPersonalComplete = (data) => {
     setPersonalInfo(data);
     setStep("data");
   };
 
-  // Called by DataCollection when user clicks Analyze
-  // We will send ONE row to /predict using the subjective data.
+  // When data collected → call backend model
   const onDataCollected = async (deviceOrFileResults) => {
     setBusy(true);
     setError("");
 
     try {
-      // Minimal row mapping (subjective fields). Adjust to your model’s feature names.
       const row = {
-        // Map your actual model feature names here:
         name: personalInfo?.name || "",
         age: Number(personalInfo?.age ?? 0),
         gender: personalInfo?.gender || "",
@@ -55,17 +52,13 @@ export default function Home() {
           ? personalInfo.sleepIssues.join("|")
           : "",
         medical_history: personalInfo?.medicalHistory || "",
-        // You can later add processed features from deviceOrFileResults if needed
       };
 
       const resp = await predict([row]); // backend expects { rows: [...] }
-      // Example expected response shape (per your FastAPI): { results: [{ pred_risk, probs }], features_used: [...] }
-      const modelPayload = resp;
 
-      // Combine ML results with the UI’s mocked charts/data for now:
       const merged = {
         ...(deviceOrFileResults || {}),
-        model: modelPayload,
+        model: resp,
       };
 
       setAnalysisResults(merged);
@@ -91,7 +84,7 @@ export default function Home() {
             <h1 className="text-xl font-semibold">🧠 REMInsight</h1>
             <div className="text-sm">
               API:{" "}
-              {healthOk ? (
+              {healthOk?.ok ? (
                 <span className="text-green-600">UP</span>
               ) : (
                 <span className="text-red-600">DOWN</span>
@@ -100,7 +93,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Steps */}
+        {/* Stepper */}
         <div className="max-w-4xl mx-auto p-4">
           <div className="flex items-center justify-center gap-6 my-6">
             {["personal", "data", "results"].map((s, i) => (
@@ -125,7 +118,7 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Content per step */}
+          {/* Content */}
           {step === "personal" && (
             <PersonalInfoForm onComplete={onPersonalComplete} />
           )}
