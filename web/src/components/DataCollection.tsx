@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { predict } from "../api";
+
 // BEFORE (broken)
 import { predict } from "../api"; // if it already looks like this, keep it
 
