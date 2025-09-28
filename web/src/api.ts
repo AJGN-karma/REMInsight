@@ -10,6 +10,7 @@ export async function health() {
   return res.json();
 }
 
+
 export async function predict(rows: Array<Record<string, any>>) {
   const res = await fetch(`${API_BASE}/predict`, {
     method: "POST",
