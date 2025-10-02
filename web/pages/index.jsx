@@ -1,7 +1,8 @@
+// web/pages/index.jsx
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 
-import { apiHealth, predict } from "../lib/api";
+import { apiHealth, predict } from "../src/lib/api";   // <- IMPORTANT path
 import DataCollection from "../src/components/DataCollection";
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
 import ResultsDashboard from "../src/components/ResultsDashboard";
@@ -14,6 +15,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  // check backend health once
   useEffect(() => {
     (async () => {
       try {
@@ -25,30 +27,40 @@ export default function Home() {
     })();
   }, []);
 
+  // when personal info finishes, go to Data step
   const onPersonalComplete = (data) => {
     setPersonalInfo(data);
     setStep("data");
   };
 
-  const onDataCollected = async (deviceOrFileResults) => {
+  // ========= THIS is the function you asked about =========
+  // Called by DataCollection with parsed CSV/JSON rows
+  const onDataCollected = async (uploadedRows) => {
     setBusy(true);
     setErr("");
-    try {
-      // Map subjective fields to your model schema (adjust names if needed)
-      const row = {
-        name: personalInfo?.name || "",
-        age: Number(personalInfo?.age ?? 0),
-        gender: personalInfo?.gender || "",
-        sleep_quality: Number(personalInfo?.sleepQuality ?? 0),
-        sleep_duration: Number(personalInfo?.sleepDuration ?? 0),
-        sleep_issues: Array.isArray(personalInfo?.sleepIssues)
-          ? personalInfo.sleepIssues.join("|")
-          : "",
-        medical_history: personalInfo?.medicalHistory || ""
-      };
 
-      const modelResp = await predict([row]);
-      setAnalysisResults({ ...(deviceOrFileResults || {}), model: modelResp });
+    try {
+      if (!Array.isArray(uploadedRows) || uploadedRows.length === 0) {
+        throw new Error("No rows parsed from the uploaded file.");
+      }
+
+      // Map string -> numbers and keep keys your model expects.
+      // Adjust keys to EXACTLY match your model features, if different.
+      const rows = uploadedRows.map((r) => ({
+        ...r,
+        age: Number(r.age ?? 0),
+        gender: r.gender || "",
+        psqi_global: Number(r.psqi_global ?? 0),
+        REM_total_min: Number(r.REM_total_min ?? 0),
+        REM_latency_min: Number(r.REM_latency_min ?? 0),
+        REM_pct: Number(r.REM_pct ?? 0),
+      }));
+
+      // Call backend (FastAPI expects { rows: [...] })
+      const resp = await predict(rows);
+
+      // resp shape (per your API): { results: [{ pred_risk, probs }...], features_used: [...] }
+      setAnalysisResults(resp);
       setStep("results");
     } catch (e) {
       setErr(e.message || "Prediction failed");
@@ -56,13 +68,14 @@ export default function Home() {
       setBusy(false);
     }
   };
+  // ========================================================
 
   const bar = {
     background: "#fff",
     borderBottom: "1px solid #e5e7eb",
     position: "sticky",
     top: 0,
-    zIndex: 10
+    zIndex: 10,
   };
 
   return (
@@ -80,7 +93,7 @@ export default function Home() {
             padding: 16,
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between"
+            justifyContent: "space-between",
           }}
         >
           <div style={{ fontSize: 18, fontWeight: 700 }}>🧠 REMInsight</div>
@@ -97,7 +110,14 @@ export default function Home() {
 
       <main style={{ maxWidth: 768, margin: "0 auto", padding: 16 }}>
         {/* Stepper */}
-        <div style={{ display: "flex", gap: 24, justifyContent: "center", margin: "16px 0" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 24,
+            justifyContent: "center",
+            margin: "16px 0",
+          }}
+        >
           {["personal", "data", "results"].map((s, i) => (
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div
@@ -117,7 +137,7 @@ export default function Home() {
                         (s === "results" && analysisResults)
                       ? "#16a34a"
                       : "#9ca3af",
-                  fontWeight: 700
+                  fontWeight: 700,
                 }}
               >
                 {i + 1}
@@ -129,7 +149,9 @@ export default function Home() {
         </div>
 
         {/* Content */}
-        {step === "personal" && <PersonalInfoForm onComplete={onPersonalComplete} />}
+        {step === "personal" && (
+          <PersonalInfoForm onComplete={onPersonalComplete} />
+        )}
 
         {step === "data" && (
           <>
@@ -142,7 +164,7 @@ export default function Home() {
                   borderRadius: 8,
                   border: "1px solid #d1d5db",
                   background: "#fff",
-                  cursor: "pointer"
+                  cursor: "pointer",
                 }}
               >
                 ← Back
@@ -153,8 +175,17 @@ export default function Home() {
 
         {step === "results" && (
           <>
-            <ResultsDashboard results={analysisResults} personalInfo={personalInfo} />
-            <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
+            <ResultsDashboard
+              results={analysisResults}
+              personalInfo={personalInfo}
+            />
+            <div
+              style={{
+                marginTop: 12,
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
               <button
                 onClick={() => setStep("data")}
                 style={{
@@ -162,7 +193,7 @@ export default function Home() {
                   borderRadius: 8,
                   border: "1px solid #d1d5db",
                   background: "#fff",
-                  cursor: "pointer"
+                  cursor: "pointer",
                 }}
               >
                 ← Back
@@ -179,7 +210,7 @@ export default function Home() {
                   background: "#2563eb",
                   color: "#fff",
                   cursor: "pointer",
-                  fontWeight: 600
+                  fontWeight: 600,
                 }}
               >
                 New Analysis
@@ -195,7 +226,7 @@ export default function Home() {
               padding: 12,
               background: "#eff6ff",
               border: "1px solid #bfdbfe",
-              borderRadius: 8
+              borderRadius: 8,
             }}
           >
             Running model…
@@ -209,7 +240,7 @@ export default function Home() {
               background: "#fef2f2",
               border: "1px solid #fecaca",
               borderRadius: 8,
-              color: "#b91c1c"
+              color: "#b91c1c",
             }}
           >
             {err}
