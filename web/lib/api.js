@@ -1,25 +1,22 @@
+// web/src/lib/api.js
 const API_BASE =
-  (typeof window !== "undefined" && window.__API_BASE__) ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "";
+  process.env.NEXT_PUBLIC_API_BASE || "https://reminsight.onrender.com";
 
 export async function apiHealth() {
-  const url = `${API_BASE}/health`;
-  const res = await fetch(url, { method: "GET" });
-  if (!res.ok) throw new Error(`Health check failed (${res.status})`);
-  return res.json(); // { ok: True } or { status: "ok" ... }
+  const res = await fetch(`${API_BASE}/health`);
+  if (!res.ok) throw new Error(`Health failed: ${res.status}`);
+  return res.json();
 }
 
 export async function predict(rows) {
-  const url = `${API_BASE}/predict`;
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}/predict`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rows })
+    body: JSON.stringify({ rows }),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Predict failed (${res.status}): ${text}`);
+    const text = await res.text();
+    throw new Error(`Predict failed: ${res.status} ${text}`);
   }
-  return res.json(); // { results: [...], features_used: [...] }
+  return res.json();
 }
