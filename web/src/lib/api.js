@@ -1,22 +1,20 @@
-// web/src/lib/api.js
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "https://reminsight.onrender.com";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
 export async function apiHealth() {
-  const res = await fetch(`${API_BASE}/health`);
-  if (!res.ok) throw new Error(`Health failed: ${res.status}`);
-  return res.json();
+  const r = await fetch(`${API_BASE}/health`, { cache: "no-store" });
+  if (!r.ok) throw new Error("health check failed");
+  return r.json(); // {status:"ok", features:<number>} on your backend
 }
 
 export async function predict(rows) {
-  const res = await fetch(`${API_BASE}/predict`, {
+  const r = await fetch(`${API_BASE}/predict`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rows }),
+    body: JSON.stringify({ rows })
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Predict failed: ${res.status} ${text}`);
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`predict failed (${r.status}): ${text}`);
   }
-  return res.json();
+  return r.json(); // { results: [...], features_used: [...] }
 }
