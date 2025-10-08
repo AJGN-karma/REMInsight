@@ -1,10 +1,10 @@
-// web/pages/index.jsx
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
+import { apiHealth, predict } from "../src/lib/api";
+import { ensureSignedIn, saveAnalysis } from "../src/lib/firebase";
 
-import { apiHealth, predict } from "../src/lib/api";   // <- IMPORTANT path
-import DataCollection from "../src/components/DataCollection";
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
+import DataCollection from "../src/components/DataCollection";
 import ResultsDashboard from "../src/components/ResultsDashboard";
 
 export default function Home() {
@@ -15,51 +15,33 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  // check backend health once
   useEffect(() => {
     (async () => {
-      try {
-        const h = await apiHealth();
-        setHealth(h);
-      } catch {
-        setHealth({ ok: false });
-      }
+      try { await ensureSignedIn(); } catch (e) { console.warn("Anon auth failed:", e); }
+      try { setHealth(await apiHealth()); } catch { setHealth({ ok: false }); }
     })();
   }, []);
 
-  // when personal info finishes, go to Data step
   const onPersonalComplete = (data) => {
     setPersonalInfo(data);
     setStep("data");
   };
 
-  // ========= THIS is the function you asked about =========
-  // Called by DataCollection with parsed CSV/JSON rows
+  // 🔑 This is called by DataCollection with already-parsed rows from CSV/JSON
   const onDataCollected = async (uploadedRows) => {
     setBusy(true);
     setErr("");
-
     try {
-      if (!Array.isArray(uploadedRows) || uploadedRows.length === 0) {
-        throw new Error("No rows parsed from the uploaded file.");
+      // send rows directly; backend reindexes to its features and handles NaN
+      const resp = await predict(uploadedRows); // {results, features_used}
+
+      // save to Firestore (non-blocking for UX)
+      try {
+        await saveAnalysis({ personalInfo, uploadedRows, modelResponse: resp });
+      } catch (saveErr) {
+        console.warn("Save to Firestore failed:", saveErr);
       }
 
-      // Map string -> numbers and keep keys your model expects.
-      // Adjust keys to EXACTLY match your model features, if different.
-      const rows = uploadedRows.map((r) => ({
-        ...r,
-        age: Number(r.age ?? 0),
-        gender: r.gender || "",
-        psqi_global: Number(r.psqi_global ?? 0),
-        REM_total_min: Number(r.REM_total_min ?? 0),
-        REM_latency_min: Number(r.REM_latency_min ?? 0),
-        REM_pct: Number(r.REM_pct ?? 0),
-      }));
-
-      // Call backend (FastAPI expects { rows: [...] })
-      const resp = await predict(rows);
-
-      // resp shape (per your API): { results: [{ pred_risk, probs }...], features_used: [...] }
       setAnalysisResults(resp);
       setStep("results");
     } catch (e) {
@@ -68,14 +50,13 @@ export default function Home() {
       setBusy(false);
     }
   };
-  // ========================================================
 
   const bar = {
     background: "#fff",
     borderBottom: "1px solid #e5e7eb",
     position: "sticky",
     top: 0,
-    zIndex: 10,
+    zIndex: 10
   };
 
   return (
@@ -93,13 +74,13 @@ export default function Home() {
             padding: 16,
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "space-between"
           }}
         >
           <div style={{ fontSize: 18, fontWeight: 700 }}>🧠 REMInsight</div>
           <div style={{ fontSize: 14 }}>
             API:{" "}
-            {health?.ok ? (
+            {health?.status === "ok" || health?.ok ? (
               <span style={{ color: "#16a34a", fontWeight: 600 }}>UP</span>
             ) : (
               <span style={{ color: "#dc2626", fontWeight: 600 }}>DOWN</span>
@@ -110,14 +91,7 @@ export default function Home() {
 
       <main style={{ maxWidth: 768, margin: "0 auto", padding: 16 }}>
         {/* Stepper */}
-        <div
-          style={{
-            display: "flex",
-            gap: 24,
-            justifyContent: "center",
-            margin: "16px 0",
-          }}
-        >
+        <div style={{ display: "flex", gap: 24, justifyContent: "center", margin: "16px 0" }}>
           {["personal", "data", "results"].map((s, i) => (
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div
@@ -137,7 +111,7 @@ export default function Home() {
                         (s === "results" && analysisResults)
                       ? "#16a34a"
                       : "#9ca3af",
-                  fontWeight: 700,
+                  fontWeight: 700
                 }}
               >
                 {i + 1}
@@ -148,10 +122,8 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Content */}
-        {step === "personal" && (
-          <PersonalInfoForm onComplete={onPersonalComplete} />
-        )}
+        {/* Steps */}
+        {step === "personal" && <PersonalInfoForm onComplete={onPersonalComplete} />}
 
         {step === "data" && (
           <>
@@ -164,7 +136,7 @@ export default function Home() {
                   borderRadius: 8,
                   border: "1px solid #d1d5db",
                   background: "#fff",
-                  cursor: "pointer",
+                  cursor: "pointer"
                 }}
               >
                 ← Back
@@ -175,17 +147,8 @@ export default function Home() {
 
         {step === "results" && (
           <>
-            <ResultsDashboard
-              results={analysisResults}
-              personalInfo={personalInfo}
-            />
-            <div
-              style={{
-                marginTop: 12,
-                display: "flex",
-                justifyContent: "space-between",
-              }}
-            >
+            <ResultsDashboard results={analysisResults} personalInfo={personalInfo} />
+            <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
               <button
                 onClick={() => setStep("data")}
                 style={{
@@ -193,7 +156,7 @@ export default function Home() {
                   borderRadius: 8,
                   border: "1px solid #d1d5db",
                   background: "#fff",
-                  cursor: "pointer",
+                  cursor: "pointer"
                 }}
               >
                 ← Back
@@ -210,7 +173,7 @@ export default function Home() {
                   background: "#2563eb",
                   color: "#fff",
                   cursor: "pointer",
-                  fontWeight: 600,
+                  fontWeight: 600
                 }}
               >
                 New Analysis
@@ -225,8 +188,8 @@ export default function Home() {
               marginTop: 12,
               padding: 12,
               background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              borderRadius: 8,
+              border: "1px solid "#bfdbfe",
+              borderRadius: 8
             }}
           >
             Running model…
@@ -240,7 +203,7 @@ export default function Home() {
               background: "#fef2f2",
               border: "1px solid #fecaca",
               borderRadius: 8,
-              color: "#b91c1c",
+              color: "#b91c1c"
             }}
           >
             {err}
