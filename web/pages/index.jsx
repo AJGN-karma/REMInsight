@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
-import { apiHealth, predict } from "../src/lib/api";
-import { ensureSignedIn, saveAnalysis } from "../src/lib/firebase";
 
-import PersonalInfoForm from "../src/components/PersonalInfoForm";
+import { apiHealth, predict } from "../src/lib/api";
 import DataCollection from "../src/components/DataCollection";
+import PersonalInfoForm from "../src/components/PersonalInfoForm";
 import ResultsDashboard from "../src/components/ResultsDashboard";
 
 export default function Home() {
@@ -17,8 +16,12 @@ export default function Home() {
 
   useEffect(() => {
     (async () => {
-      try { await ensureSignedIn(); } catch (e) { console.warn("Anon auth failed:", e); }
-      try { setHealth(await apiHealth()); } catch { setHealth({ ok: false }); }
+      try {
+        const h = await apiHealth();
+        setHealth(h);
+      } catch {
+        setHealth({ ok: false });
+      }
     })();
   }, []);
 
@@ -27,22 +30,37 @@ export default function Home() {
     setStep("data");
   };
 
-  // 🔑 This is called by DataCollection with already-parsed rows from CSV/JSON
-  const onDataCollected = async (uploadedRows) => {
+  // If you’re uploading CSV/JSON rows from DataCollection, pass them here:
+  // parent -> onDataCollected(uploadedRows)
+  const onDataCollected = async (uploadedRowsOrDevice) => {
     setBusy(true);
     setErr("");
     try {
-      // send rows directly; backend reindexes to its features and handles NaN
-      const resp = await predict(uploadedRows); // {results, features_used}
+      // If DataCollection returns uploaded rows (CSV/JSON), use them directly:
+      let rows = Array.isArray(uploadedRowsOrDevice)
+        ? uploadedRowsOrDevice
+        : [];
 
-      // save to Firestore (non-blocking for UX)
-      try {
-        await saveAnalysis({ personalInfo, uploadedRows, modelResponse: resp });
-      } catch (saveErr) {
-        console.warn("Save to Firestore failed:", saveErr);
-      }
+      // If you still want to include subjective info as a single row instead,
+      // comment the block above and uncomment this block:
+      /*
+      const rows = [
+        {
+          name: personalInfo?.name || "",
+          age: Number(personalInfo?.age ?? 0),
+          gender: personalInfo?.gender || "",
+          sleep_quality: Number(personalInfo?.sleepQuality ?? 0),
+          sleep_duration: Number(personalInfo?.sleepDuration ?? 0),
+          sleep_issues: Array.isArray(personalInfo?.sleepIssues)
+            ? personalInfo.sleepIssues.join("|")
+            : "",
+          medical_history: personalInfo?.medicalHistory || ""
+        }
+      ];
+      */
 
-      setAnalysisResults(resp);
+      const modelResp = await predict(rows);
+      setAnalysisResults(modelResp);
       setStep("results");
     } catch (e) {
       setErr(e.message || "Prediction failed");
@@ -122,7 +140,7 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Steps */}
+        {/* Content */}
         {step === "personal" && <PersonalInfoForm onComplete={onPersonalComplete} />}
 
         {step === "data" && (
@@ -188,7 +206,7 @@ export default function Home() {
               marginTop: 12,
               padding: 12,
               background: "#eff6ff",
-              border: "1px solid "#bfdbfe",
+              border: "1px solid #bfdbfe",     // ✅ fixed quotes
               borderRadius: 8
             }}
           >
@@ -201,7 +219,7 @@ export default function Home() {
               marginTop: 12,
               padding: 12,
               background: "#fef2f2",
-              border: "1px solid #fecaca",
+              border: "1px solid #fecaca",     // ✅ fixed quotes
               borderRadius: 8,
               color: "#b91c1c"
             }}
