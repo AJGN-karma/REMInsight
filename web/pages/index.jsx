@@ -30,37 +30,14 @@ export default function Home() {
     setStep("data");
   };
 
-  // If you’re uploading CSV/JSON rows from DataCollection, pass them here:
-  // parent -> onDataCollected(uploadedRows)
-  const onDataCollected = async (uploadedRowsOrDevice) => {
+  // Main bridge: gets rows (array of objects) from DataCollection and calls backend
+  const onDataCollected = async (uploadedRows) => {
     setBusy(true);
     setErr("");
     try {
-      // If DataCollection returns uploaded rows (CSV/JSON), use them directly:
-      let rows = Array.isArray(uploadedRowsOrDevice)
-        ? uploadedRowsOrDevice
-        : [];
-
-      // If you still want to include subjective info as a single row instead,
-      // comment the block above and uncomment this block:
-      /*
-      const rows = [
-        {
-          name: personalInfo?.name || "",
-          age: Number(personalInfo?.age ?? 0),
-          gender: personalInfo?.gender || "",
-          sleep_quality: Number(personalInfo?.sleepQuality ?? 0),
-          sleep_duration: Number(personalInfo?.sleepDuration ?? 0),
-          sleep_issues: Array.isArray(personalInfo?.sleepIssues)
-            ? personalInfo.sleepIssues.join("|")
-            : "",
-          medical_history: personalInfo?.medicalHistory || ""
-        }
-      ];
-      */
-
-      const modelResp = await predict(rows);
-      setAnalysisResults(modelResp);
+      // uploadedRows already include your objective features in columns that match /features
+      const resp = await predict(uploadedRows);
+      setAnalysisResults(resp); // { results: [...], features_used: [...] }
       setStep("results");
     } catch (e) {
       setErr(e.message || "Prediction failed");
@@ -114,12 +91,8 @@ export default function Home() {
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  width: 36, height: 36, borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
                   color: "#fff",
                   background:
                     step === s
@@ -149,13 +122,7 @@ export default function Home() {
             <div style={{ marginTop: 12, textAlign: "right" }}>
               <button
                 onClick={() => setStep("personal")}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #d1d5db",
-                  background: "#fff",
-                  cursor: "pointer"
-                }}
+                style={btnSecondary}
               >
                 ← Back
               </button>
@@ -167,32 +134,10 @@ export default function Home() {
           <>
             <ResultsDashboard results={analysisResults} personalInfo={personalInfo} />
             <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
+              <button onClick={() => setStep("data")} style={btnSecondary}>← Back</button>
               <button
-                onClick={() => setStep("data")}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid #d1d5db",
-                  background: "#fff",
-                  cursor: "pointer"
-                }}
-              >
-                ← Back
-              </button>
-              <button
-                onClick={() => {
-                  setAnalysisResults(null);
-                  setStep("personal");
-                }}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#2563eb",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontWeight: 600
-                }}
+                onClick={() => { setAnalysisResults(null); setStep("personal"); }}
+                style={btnPrimary}
               >
                 New Analysis
               </button>
@@ -201,33 +146,17 @@ export default function Home() {
         )}
 
         {busy && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: 12,
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",     // ✅ fixed quotes
-              borderRadius: 8
-            }}
-          >
-            Running model…
-          </div>
+          <div style={busyBox}>Running model…</div>
         )}
         {err && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: 12,
-              background: "#fef2f2",
-              border: "1px solid #fecaca",     // ✅ fixed quotes
-              borderRadius: 8,
-              color: "#b91c1c"
-            }}
-          >
-            {err}
-          </div>
+          <div style={errBox}>{err}</div>
         )}
       </main>
     </>
   );
 }
+
+const btnSecondary = { padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" };
+const btnPrimary   = { padding:"8px 12px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", cursor:"pointer", fontWeight:600 };
+const busyBox = { marginTop:12, padding:12, background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8 };
+const errBox  = { marginTop:12, padding:12, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, color:"#b91c1c" };
