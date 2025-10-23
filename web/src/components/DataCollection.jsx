@@ -1,116 +1,131 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { getFeatures } from "../lib/api";
 
-export default function DataCollection({ modelFeatures = [], onDataCollected }) {
+export default function DataCollection({ onDataCollected }) {
+  const [features, setFeatures] = useState(null);
   const [rows, setRows] = useState([]);
-  const [fileErr, setFileErr] = useState("");
-  const [infoMsg, setInfoMsg] = useState("");
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
 
-  function coerceValue(v) {
-    if (v === "" || v === null || typeof v === "undefined") return null;
-    // try numeric
-    const n = Number(v);
-    if (!Number.isNaN(n) && v !== true && v !== false) return n;
-    // leave strings/booleans as-is (if your model expects only numbers,
-    // put 0/1 in your CSV columns for categorical one-hots).
-    return v;
-  }
-
-  function normalize(rawRows, features) {
-    return rawRows.map((r) => {
-      const out = {};
-      for (const f of features) {
-        out[f] = coerceValue(r[f]);
+  useEffect(()=>{
+    (async()=>{
+      try {
+        const f = await getFeatures();
+        setFeatures(f.features || null);
+      } catch(e) {
+        setFeatures(null); // still allow uploads; we’ll not validate if API can’t tell us
       }
-      return out;
+    })();
+  },[]);
+
+  function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (!lines.length) return [];
+    const headers = lines[0].split(",").map(h=>h.trim());
+    return lines.slice(1).map(line=>{
+      const cells = line.split(",");
+      const obj = {};
+      headers.forEach((h, i)=> { obj[h] = (cells[i]??"").trim(); });
+      return obj;
     });
   }
 
-  async function handleFile(file) {
-    setFileErr("");
-    setInfoMsg("");
-    try {
-      const text = await file.text();
-      let rawRows;
+  async function handleFile(file){
+    setError(""); setMsg("");
+    if (!file) return;
 
-      if (file.name.toLowerCase().endsWith(".json")) {
-        const parsed = JSON.parse(text);
-        rawRows = Array.isArray(parsed) ? parsed : parsed.rows || [];
-      } else if (file.name.toLowerCase().endsWith(".csv")) {
-        const lines = text.split(/\r?\n/).filter(Boolean);
-        if (lines.length < 2) throw new Error("CSV must have a header and at least one row.");
-        const headers = lines[0].split(",").map((h) => h.trim());
-        rawRows = lines.slice(1).map((line) => {
-          const cols = line.split(",");
-          const obj = {};
-          headers.forEach((h, i) => (obj[h] = cols[i] ?? null));
-          return obj;
-        });
-      } else {
-        throw new Error("Use .csv or .json");
-      }
+    const text = await file.text();
+    let parsed = [];
 
-      if (!Array.isArray(rawRows) || rawRows.length === 0) {
-        throw new Error("No rows found.");
-      }
-
-      // Check columns
-      const rawKeys = Object.keys(rawRows[0] || {});
-      const missing = modelFeatures.filter((k) => !rawKeys.includes(k));
-      const extra = rawKeys.filter((k) => !modelFeatures.includes(k));
-
-      if (missing.length > 0) {
-        setInfoMsg(`Missing columns (sent as null): ${missing.join(", ")}`);
-      } else if (extra.length > 0) {
-        setInfoMsg(`Ignoring extra columns: ${extra.join(", ")}`);
-      } else {
-        setInfoMsg(`All columns match the model.`);
-      }
-
-      const aligned = normalize(rawRows, modelFeatures);
-      setRows(aligned);
-    } catch (e) {
-      console.error(e);
-      setRows([]);
-      setFileErr(e.message || "Failed to parse file");
+    if (file.name.toLowerCase().endsWith(".json")) {
+      // JSON can be single object or array
+      const json = JSON.parse(text);
+      parsed = Array.isArray(json) ? json : [json];
+    } else if (file.name.toLowerCase().endsWith(".csv")) {
+      parsed = parseCSV(text);
+    } else {
+      setError("Only CSV or JSON are supported for now.");
+      return;
     }
+
+    if (!parsed.length) {
+      setError("No rows detected in the file.");
+      return;
+    }
+
+    // If we have features list from API, validate
+    if (features && features.length) {
+      const missing = features.filter(f => !(f in parsed[0]));
+      if (missing.length) {
+        setError(
+          `Missing required columns: ${missing.join(", ")}. ` +
+          `Make sure your header row matches /features exactly.`
+        );
+        return;
+      }
+    }
+
+    setRows(parsed);
+    setMsg(`Loaded ${parsed.length} row(s).`);
+  }
+
+  async function analyze(){
+    setError("");
+    if (!rows.length) {
+      setError("Please upload a CSV or JSON with at least 1 row.");
+      return;
+    }
+    // Normalize a few numeric-looking fields commonly used
+    const normalized = rows.map(r => ({
+      ...r,
+      age: r.age !== undefined ? Number(r.age) : r.age,
+      psqi_global: r.psqi_global !== undefined ? Number(r.psqi_global) : r.psqi_global,
+      REM_total_min: r.REM_total_min !== undefined ? Number(r.REM_total_min) : r.REM_total_min,
+      REM_latency_min: r.REM_latency_min !== undefined ? Number(r.REM_latency_min) : r.REM_latency_min,
+      REM_pct: r.REM_pct !== undefined ? Number(r.REM_pct) : r.REM_pct
+    }));
+    onDataCollected(normalized);
   }
 
   return (
-    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
-      <h2 style={{ marginTop: 0, marginBottom: 12 }}>📁 File Upload</h2>
+    <div style={card}>
+      <h2 style={h2}>📁 Objective Data Upload (CSV / JSON)</h2>
 
-      <input
-        type="file"
-        accept=".csv,.json"
-        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-      />
+      <p style={{marginTop:0, color:"#374151"}}>
+        Upload patient-night rows with columns that match your model’s <code>/features</code>.
+      </p>
 
-      {fileErr && <div style={{ color: "#b91c1c", marginTop: 8 }}>{fileErr}</div>}
-      {infoMsg && <div style={{ color: "#374151", marginTop: 8, fontSize: 13 }}>{infoMsg}</div>}
-
-      <div style={{ marginTop: 16 }}>
-        <button
-          onClick={() => onDataCollected(rows)}
-          disabled={rows.length === 0}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            background: rows.length === 0 ? "#9ca3af" : "#2563eb",
-            color: "#fff",
-            border: "none",
-            cursor: rows.length === 0 ? "not-allowed" : "pointer",
-            fontWeight: 600
-          }}
-        >
-          Analyze with AI Model
-        </button>
+      <div style={uploader}>
+        <input
+          type="file"
+          accept=".csv,application/json"
+          onChange={(e)=>handleFile(e.target.files?.[0])}
+        />
       </div>
 
-      {rows.length > 0 && (
-        <div style={{ marginTop: 8, fontSize: 13, color: "#4b5563" }}>
-          Ready to send {rows.length} row(s).
+      {features && features.length > 0 && (
+        <div style={hintBox}>
+          <div style={{fontWeight:600, marginBottom:6}}>Required feature columns from API (/features)</div>
+          <div style={{fontSize:12, color:"#374151", lineHeight:"20px"}}>
+            {features.join(", ")}
+          </div>
         </div>
       )}
+
+      {msg && <div style={okBox}>{msg}</div>}
+      {error && <div style={errBox}>{error}</div>}
+
+      <div style={{marginTop:12, textAlign:"right"}}>
+        <button onClick={analyze} style={btnPrimary}>🧠 Analyze with AI →</button>
+      </div>
     </div>
   );
 }
+
+const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16 };
+const h2 = { margin:0, marginBottom:12, fontSize:20, fontWeight:700 };
+const uploader = { padding:12, border:"1px dashed #d1d5db", borderRadius:12, background:"#f9fafb" };
+const hintBox = { marginTop:12, padding:12, border:"1px solid #d1d5db", borderRadius:8, background:"#f3f4f6" };
+const okBox = { marginTop:12, padding:12, border:"1px solid #bbf7d0", borderRadius:8, background:"#ecfdf5", color:"#065f46" };
+const errBox = { marginTop:12, padding:12, border:"1px solid #fecaca", borderRadius:8, background:"#fef2f2", color:"#991b1b" };
+const btnPrimary = { padding:"10px 14px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", fontWeight:600, cursor:"pointer" };
