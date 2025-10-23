@@ -1,28 +1,33 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+// web/src/lib/api.js
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE || "https://reminsight.onrender.com";
 
-async function http(path, { method = 'GET', body } = {}) {
-  const url = `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined
-  });
+async function j(res) {
   if (!res.ok) {
-    const txt = await res.text().catch(()=> '');
-    throw new Error(`API ${method} ${path} failed: ${res.status} ${txt}`);
+    const t = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText} ${t}`);
   }
   return res.json();
 }
 
 export async function apiHealth() {
-  return http('/health');
+  // /health -> { status: "ok", features: 24 }
+  const r = await fetch(`${API_BASE}/health`, { method: "GET" });
+  return j(r);
 }
+
 export async function getFeatures() {
-  return http('/features');
+  // /features -> { features: [...] }
+  const r = await fetch(`${API_BASE}/features`, { method: "GET" });
+  return j(r);
 }
+
 export async function predict(rows) {
-  return http('/predict', { method: 'POST', body: { rows } });
-}
-export async function sampleRow() {
-  return http('/sample_row');
+  // body must be: { rows: [...] }
+  const r = await fetch(`${API_BASE}/predict`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows }),
+  });
+  return j(r);
 }
