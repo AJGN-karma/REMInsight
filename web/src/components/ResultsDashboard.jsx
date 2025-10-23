@@ -3,14 +3,6 @@ import React, { useState } from "react";
 export default function ResultsDashboard({ results, personalInfo }) {
   const [tab, setTab] = useState("overview");
 
-  const card = {
-    background: "#fff",
-    border: "1px solid #e5e7eb",
-    borderRadius: 12,
-    padding: 16,
-    boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
-  };
-
   if (!results) {
     return (
       <div style={card}>
@@ -23,178 +15,117 @@ export default function ResultsDashboard({ results, personalInfo }) {
     );
   }
 
-  // model returns: { results: [{pred_risk, probs:[..]}], features_used:[..] }
-  const avgProb =
-    results.results && results.results.length
-      ? results.results[0].probs.map((_, i) =>
-          (
-            results.results
-              .map((r) => r.probs[i])
-              .reduce((a, b) => a + b, 0) / results.results.length
-          ).toFixed(3)
-        )
-      : [];
-
+  const preds = results.results || [];
   const riskMap = ["Low", "Medium", "High"];
-  const predCounts = [0, 0, 0];
-  (results.results || []).forEach((r) => {
-    predCounts[r.pred_risk] = (predCounts[r.pred_risk] || 0) + 1;
-  });
-
-  const total = (results.results || []).length || 1;
-  const predPerc = predCounts.map((n) => ((n / total) * 100).toFixed(1));
+  const counts = [0,0,0];
+  preds.forEach(p => { counts[p.pred_risk] = (counts[p.pred_risk]||0)+1; });
+  const total = Math.max(1, preds.length);
+  const percentages = counts.map(n => ((n/total)*100).toFixed(1));
 
   return (
     <div style={card}>
-      <h2 style={{ margin: 0, marginBottom: 12, fontSize: 20, fontWeight: 700 }}>
-        📈 Prediction Summary
-      </h2>
+      <h2 style={h2}>📈 Prediction Summary</h2>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+      <div style={tabs}>
         {[
-          ["overview", "📊 Overview"],
-          ["probs", "🎯 Class Probabilities"],
-          ["personal", "👤 Personal Info"]
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: 8,
-              border: "1px solid #d1d5db",
-              background: tab === key ? "#fff" : "#f3f4f6",
-              cursor: "pointer"
-            }}
-          >
-            {label}
+          ["overview","📊 Overview"],
+          ["rows","🧾 Per-Row Predictions"],
+          ["probs","🎯 Class Probabilities (Avg)"],
+          ["personal","👤 Personal Info"]
+        ].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{...tabBtn, background: tab===k ? "#fff" : "#f3f4f6"}}>
+            {l}
           </button>
         ))}
       </div>
 
-      {/* Overview */}
-      {tab === "overview" && (
+      {tab==="overview" && (
         <>
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))"
-            }}
-          >
-            {riskMap.map((r, i) => (
-              <Stat
-                key={r}
-                title={`${r} Risk`}
-                value={`${predPerc[i]}%`}
-                color={i === 0 ? "#10b981" : i === 1 ? "#f59e0b" : "#ef4444"}
-              />
-            ))}
+          <div style={gridAuto}>
+            <Stat title="Low Risk" value={`${percentages[0]}%`} color="#10b981" />
+            <Stat title="Medium Risk" value={`${percentages[1]}%`} color="#f59e0b" />
+            <Stat title="High Risk" value={`${percentages[2]}%`} color="#ef4444" />
           </div>
 
-          <div
-            style={{
-              marginTop: 16,
-              background: "#f9fafb",
-              borderRadius: 12,
-              padding: 16
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>
-              Model Confidence
-            </div>
+          <div style={panel}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Model Confidence</div>
             <div style={{ fontSize: 14, color: "#374151" }}>
-              Predicted psychiatric risk category is{" "}
-              <b>
-                {
-                  riskMap[
-                    results.results?.[0]?.pred_risk ?? 0
-                  ]
-                }
-              </b>{" "}
-              based on analyzed REM + PSQI parameters.
+              Predicted psychiatric risk category for the first row is{" "}
+              <b>{riskMap[preds[0]?.pred_risk ?? 1]}</b>.
+              Check <b>Per-Row Predictions</b> tab for all rows.
             </div>
           </div>
         </>
       )}
 
-      {/* Probabilities */}
-      {tab === "probs" && (
-        <div
-          style={{
-            background: "#f9fafb",
-            borderRadius: 12,
-            padding: 16
-          }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>
-            Average Class Probabilities
-          </div>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: 14
-            }}
-          >
+      {tab==="rows" && (
+        <div style={panel}>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Per-Row Predictions</div>
+          <table style={table}>
             <thead>
-              <tr style={{ textAlign: "left" }}>
-                <th style={{ padding: "8px 4px" }}>Class</th>
-                <th style={{ padding: "8px 4px" }}>Probability</th>
-              </tr>
+              <tr><th>#</th><th>Predicted Risk</th><th>Prob (Low)</th><th>Prob (Med)</th><th>Prob (High)</th></tr>
             </thead>
             <tbody>
-              {avgProb.map((p, i) => (
+              {preds.map((r,i)=>(
                 <tr key={i}>
-                  <td style={{ padding: "6px 4px" }}>{riskMap[i] || i}</td>
-                  <td style={{ padding: "6px 4px" }}>{p}</td>
+                  <td>{i+1}</td>
+                  <td>{riskMap[r.pred_risk]}</td>
+                  <td>{r.probs?.[0]?.toFixed(3)}</td>
+                  <td>{r.probs?.[1]?.toFixed(3)}</td>
+                  <td>{r.probs?.[2]?.toFixed(3)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-
-          <div style={{ marginTop: 12, color: "#6b7280", fontSize: 12 }}>
-            Probabilities are normalized softmax outputs from the trained XGBoost model.
-          </div>
         </div>
       )}
 
-      {/* Personal Info */}
-      {tab === "personal" && personalInfo && (
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-          <InfoCard title="Basic Information">
-            <Row k="Name" v={personalInfo.name} />
-            <Row k="Age" v={personalInfo.age} />
-            <Row k="Gender" v={personalInfo.gender} />
-          </InfoCard>
-          <InfoCard title="Sleep Patterns">
-            <Row k="Sleep Quality" v={`${personalInfo.sleepQuality}/10`} />
-            <Row k="Sleep Duration" v={`${personalInfo.sleepDuration}h`} />
-          </InfoCard>
-          {!!(personalInfo.sleepIssues || []).length && (
-            <InfoCard title="Reported Sleep Issues">
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {personalInfo.sleepIssues.map((s) => (
-                  <span
-                    key={s}
-                    style={{
-                      background: "#fef3c7",
-                      padding: "4px 8px",
-                      borderRadius: 9999
-                    }}
-                  >
-                    {s}
-                  </span>
+      {tab==="probs" && (
+        <div style={panel}>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Average Class Probabilities</div>
+          <table style={table}>
+            <thead><tr><th>Class</th><th>Probability</th></tr></thead>
+            <tbody>
+              {[0,1,2].map(c=>{
+                const avg = preds.length
+                  ? (preds.map(p=>p.probs?.[c]||0).reduce((a,b)=>a+b,0) / preds.length)
+                  : 0;
+                return <tr key={c}><td>{riskMap[c]}</td><td>{avg.toFixed(3)}</td></tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab==="personal" && (
+        <div style={panel}>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Subjective Snapshot</div>
+          <div style={grid2}>
+            <InfoRow k="Name" v={personalInfo?.name || "—"} />
+            <InfoRow k="Age" v={personalInfo?.age ?? "—"} />
+            <InfoRow k="Gender" v={personalInfo?.gender || "—"} />
+            <InfoRow k="Sleep Quality" v={
+              personalInfo?.sleepQuality ? `${personalInfo.sleepQuality}/10` : "—"
+            } />
+            <InfoRow k="Sleep Duration" v={
+              personalInfo?.sleepDuration ? `${personalInfo.sleepDuration}h` : "—"
+            } />
+          </div>
+          {(personalInfo?.sleepIssues || []).length > 0 && (
+            <div style={{marginTop:12}}>
+              <div style={{fontWeight:600, marginBottom:6}}>Reported Sleep Issues</div>
+              <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+                {personalInfo.sleepIssues.map(s=>(
+                  <span key={s} style={chip}>{s}</span>
                 ))}
               </div>
-            </InfoCard>
+            </div>
           )}
-          {personalInfo.medicalHistory && (
-            <InfoCard title="Medical History">
-              <div style={{ whiteSpace: "pre-wrap" }}>
-                {personalInfo.medicalHistory}
-              </div>
-            </InfoCard>
+          {personalInfo?.medicalHistory && (
+            <div style={{marginTop:12}}>
+              <div style={{fontWeight:600, marginBottom:6}}>Medical History</div>
+              <div style={{whiteSpace:"pre-wrap"}}>{personalInfo.medicalHistory}</div>
+            </div>
           )}
         </div>
       )}
@@ -204,33 +135,27 @@ export default function ResultsDashboard({ results, personalInfo }) {
 
 function Stat({ title, value, color }) {
   return (
-    <div
-      style={{
-        background: "#f3f4f6",
-        borderRadius: 12,
-        padding: 12
-      }}
-    >
-      <div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: 12, color: "#374151" }}>{title}</div>
+    <div style={{ background:"#f3f4f6", borderRadius:12, padding:12 }}>
+      <div style={{ fontSize:20, fontWeight:700, color }}>{value}</div>
+      <div style={{ fontSize:12, color:"#374151" }}>{title}</div>
+    </div>
+  );
+}
+function InfoRow({k,v}) {
+  return (
+    <div style={{display:"flex", justifyContent:"space-between", marginBottom:6}}>
+      <div style={{color:"#6b7280"}}>{k}:</div>
+      <div style={{fontWeight:600}}>{v}</div>
     </div>
   );
 }
 
-function InfoCard({ title, children }) {
-  return (
-    <div style={{ background: "#f9fafb", borderRadius: 12, padding: 16 }}>
-      <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function Row({ k, v }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-      <div style={{ color: "#6b7280" }}>{k}:</div>
-      <div style={{ fontWeight: 600 }}>{v}</div>
-    </div>
-  );
-}
+const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16 };
+const h2 = { margin:0, marginBottom:12, fontSize:20, fontWeight:700 };
+const tabs = { display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" };
+const tabBtn = { padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", cursor:"pointer" };
+const panel = { marginTop:16, background:"#f9fafb", borderRadius:12, padding:16 };
+const gridAuto = { display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))" };
+const table = { width:"100%", borderCollapse:"collapse", fontSize:14 };
+const grid2 = { display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" };
+const chip = { background:"#fef3c7", padding:"4px 8px", borderRadius:9999 };
