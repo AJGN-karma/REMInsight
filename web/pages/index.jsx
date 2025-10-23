@@ -1,6 +1,6 @@
+// web/pages/index.jsx
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
-
 import { apiHealth, predict } from "../src/lib/api";
 import DataCollection from "../src/components/DataCollection";
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
@@ -30,17 +30,17 @@ export default function Home() {
     setStep("data");
   };
 
-  // Main bridge: gets rows (array of objects) from DataCollection and calls backend
-  const onDataCollected = async (uploadedRows) => {
+  // Called by <DataCollection /> with normalized rows
+  const onDataCollected = async (normalizedRows) => {
     setBusy(true);
     setErr("");
     try {
-      // uploadedRows already include your objective features in columns that match /features
-      const resp = await predict(uploadedRows);
-      setAnalysisResults(resp); // { results: [...], features_used: [...] }
+      const resp = await predict(normalizedRows); // {results:[{pred_risk, probs:[]}], features_used:[...]}
+      setAnalysisResults(resp);
       setStep("results");
     } catch (e) {
       setErr(e.message || "Prediction failed");
+      throw e;
     } finally {
       setBusy(false);
     }
@@ -91,8 +91,12 @@ export default function Home() {
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div
                 style={{
-                  width: 36, height: 36, borderRadius: "50%",
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   color: "#fff",
                   background:
                     step === s
@@ -122,7 +126,13 @@ export default function Home() {
             <div style={{ marginTop: 12, textAlign: "right" }}>
               <button
                 onClick={() => setStep("personal")}
-                style={btnSecondary}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  cursor: "pointer"
+                }}
               >
                 ← Back
               </button>
@@ -134,10 +144,32 @@ export default function Home() {
           <>
             <ResultsDashboard results={analysisResults} personalInfo={personalInfo} />
             <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
-              <button onClick={() => setStep("data")} style={btnSecondary}>← Back</button>
               <button
-                onClick={() => { setAnalysisResults(null); setStep("personal"); }}
-                style={btnPrimary}
+                onClick={() => setStep("data")}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #d1d5db",
+                  background: "#fff",
+                  cursor: "pointer"
+                }}
+              >
+                ← Back
+              </button>
+              <button
+                onClick={() => {
+                  setAnalysisResults(null);
+                  setStep("personal");
+                }}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#2563eb",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontWeight: 600
+                }}
               >
                 New Analysis
               </button>
@@ -146,17 +178,33 @@ export default function Home() {
         )}
 
         {busy && (
-          <div style={busyBox}>Running model…</div>
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              background: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              borderRadius: 8
+            }}
+          >
+            Running model…
+          </div>
         )}
         {err && (
-          <div style={errBox}>{err}</div>
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: 8,
+              color: "#b91c1c"
+            }}
+          >
+            {err}
+          </div>
         )}
       </main>
     </>
   );
 }
-
-const btnSecondary = { padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" };
-const btnPrimary   = { padding:"8px 12px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", cursor:"pointer", fontWeight:600 };
-const busyBox = { marginTop:12, padding:12, background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:8 };
-const errBox  = { marginTop:12, padding:12, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, color:"#b91c1c" };
