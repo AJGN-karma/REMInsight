@@ -1,131 +1,232 @@
+// web/src/components/DataCollection.jsx
 import React, { useEffect, useState } from "react";
 import { getFeatures } from "../lib/api";
 
 export default function DataCollection({ onDataCollected }) {
-  const [features, setFeatures] = useState(null);
+  const [features, setFeatures] = useState([]);
+  const [missing, setMissing] = useState([]);
+  const [unexpected, setUnexpected] = useState([]);
   const [rows, setRows] = useState([]);
-  const [msg, setMsg] = useState("");
-  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState(false);
 
-  useEffect(()=>{
-    (async()=>{
+  useEffect(() => {
+    (async () => {
       try {
-        const f = await getFeatures();
-        setFeatures(f.features || null);
-      } catch(e) {
-        setFeatures(null); // still allow uploads; we’ll not validate if API can’t tell us
+        const f = await getFeatures(); // {features:[...]}
+        const list = Array.isArray(f.features) ? f.features : [];
+        setFeatures(list);
+      } catch (e) {
+        setErr(`Failed to load features: ${e.message}`);
       }
     })();
-  },[]);
+  }, []);
 
-  function parseCSV(text) {
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    if (!lines.length) return [];
-    const headers = lines[0].split(",").map(h=>h.trim());
-    return lines.slice(1).map(line=>{
-      const cells = line.split(",");
+  function showTemplateCsv() {
+    const header = features.join(",");
+    const example = [
+      // one example row with plausible values
+      [
+        29, 1, 2, 2, 1, 2, 1, 1, // age, psqi_c1..c7
+        420, 90, 85, 21.4, 2.0,  // TST_min, REM_total_min, REM_latency_min, REM_pct, REM_density
+        90.5, 8,                 // sleep_efficiency_pct, micro_arousals_count
+        1.8, 2.5, 4.2, 5.1,      // mean_delta_pow..mean_beta_pow
+        1.0, 0.0, 7,             // artifact_pct, percent_epochs_missing, psqi_global
+        0.21, 0.20               // rem_to_tst_ratio, rem_latency_ratio
+      ].join(","),
+    ].join("\n");
+
+    const blob = new Blob([header + "\n" + example], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.download = "reminsight_template.csv";
+    a.href = url;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function parseCsv(text) {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) throw new Error("CSV must have a header and at least one row.");
+
+    const headerRaw = lines[0].split(",").map((h) => h.trim());
+    const header = headerRaw.map(h => h.replace(/\uFEFF/g, "")); // remove BOM if present
+
+    const items = lines.slice(1).map((ln) => ln.split(",").map((x) => x.trim()));
+
+    const rawRows = items.map((vals) => {
       const obj = {};
-      headers.forEach((h, i)=> { obj[h] = (cells[i]??"").trim(); });
+      header.forEach((h, i) => (obj[h] = vals[i] ?? ""));
       return obj;
     });
+
+    return { header, rawRows };
   }
 
-  async function handleFile(file){
-    setError(""); setMsg("");
+  function coerceNumber(v) {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function normalizeRows(rawRows, header) {
+    // Build rows matching EXACT features, fill missing with null, coerce numbers.
+    const headerSet = new Set(header);
+    const miss = features.filter((f) => !headerSet.has(f));
+    const unexp = header.filter((h) => !features.includes(h));
+
+    setMissing(miss);
+    setUnexpected(unexp);
+
+    // If any required feature missing, we can still send (your imputer handles NaN),
+    // but it's better UX to require user to fix. We'll permit send, but show warning.
+    const normalized = rawRows.map((r) => {
+      const obj = {};
+      features.forEach((f) => {
+        const val = r[f];
+        // numbers: most features are numeric—coerce to number (null => imputed)
+        obj[f] = typeof val === "string" ? coerceNumber(val) : (val ?? null);
+      });
+      return obj;
+    });
+
+    // quick sanity: at least one non-null in first row
+    const first = normalized[0] || {};
+    const nonNull = Object.values(first).some((v) => v !== null && v !== undefined && v !== "");
+    setOk(nonNull);
+
+    return normalized;
+  }
+
+  async function handleFile(e) {
+    setErr("");
+    setRows([]);
+    setMissing([]);
+    setUnexpected([]);
+    setOk(false);
+
+    const file = e.target.files?.[0];
     if (!file) return;
 
-    const text = await file.text();
-    let parsed = [];
+    try {
+      const buf = await file.arrayBuffer();
+      const text = new TextDecoder("utf-8").decode(buf);
 
-    if (file.name.toLowerCase().endsWith(".json")) {
-      // JSON can be single object or array
-      const json = JSON.parse(text);
-      parsed = Array.isArray(json) ? json : [json];
-    } else if (file.name.toLowerCase().endsWith(".csv")) {
-      parsed = parseCSV(text);
-    } else {
-      setError("Only CSV or JSON are supported for now.");
-      return;
-    }
+      let parsedRows = [];
+      let header = [];
 
-    if (!parsed.length) {
-      setError("No rows detected in the file.");
-      return;
-    }
-
-    // If we have features list from API, validate
-    if (features && features.length) {
-      const missing = features.filter(f => !(f in parsed[0]));
-      if (missing.length) {
-        setError(
-          `Missing required columns: ${missing.join(", ")}. ` +
-          `Make sure your header row matches /features exactly.`
-        );
-        return;
+      if (file.name.toLowerCase().endsWith(".json")) {
+        const data = JSON.parse(text);
+        if (!Array.isArray(data)) throw new Error("JSON must be an array of row objects.");
+        if (data.length === 0) throw new Error("JSON has zero rows.");
+        header = Object.keys(data[0]);
+        parsedRows = data;
+      } else if (file.name.toLowerCase().endsWith(".csv")) {
+        const { header: h, rawRows } = parseCsv(text);
+        header = h;
+        parsedRows = rawRows;
+      } else {
+        throw new Error("Use .csv or .json files.");
       }
-    }
 
-    setRows(parsed);
-    setMsg(`Loaded ${parsed.length} row(s).`);
+      // Normalization
+      const normalized = normalizeRows(parsedRows, header);
+      setRows(normalized);
+    } catch (ex) {
+      setErr(`Parse error: ${ex.message}`);
+    } finally {
+      e.target.value = "";
+    }
   }
 
-  async function analyze(){
-    setError("");
-    if (!rows.length) {
-      setError("Please upload a CSV or JSON with at least 1 row.");
-      return;
+  async function sendToPredict() {
+    setBusy(true);
+    setErr("");
+    try {
+      await onDataCollected(rows); // parent will call predict()
+    } catch (e) {
+      // parent could throw; still show here
+      setErr(e.message || "Failed to send prediction");
+    } finally {
+      setBusy(false);
     }
-    // Normalize a few numeric-looking fields commonly used
-    const normalized = rows.map(r => ({
-      ...r,
-      age: r.age !== undefined ? Number(r.age) : r.age,
-      psqi_global: r.psqi_global !== undefined ? Number(r.psqi_global) : r.psqi_global,
-      REM_total_min: r.REM_total_min !== undefined ? Number(r.REM_total_min) : r.REM_total_min,
-      REM_latency_min: r.REM_latency_min !== undefined ? Number(r.REM_latency_min) : r.REM_latency_min,
-      REM_pct: r.REM_pct !== undefined ? Number(r.REM_pct) : r.REM_pct
-    }));
-    onDataCollected(normalized);
   }
 
   return (
-    <div style={card}>
-      <h2 style={h2}>📁 Objective Data Upload (CSV / JSON)</h2>
+    <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 }}>
+      <h3 style={{ margin: 0, marginBottom: 12, fontWeight: 700 }}>📁 Upload CSV / JSON</h3>
 
-      <p style={{marginTop:0, color:"#374151"}}>
-        Upload patient-night rows with columns that match your model’s <code>/features</code>.
-      </p>
-
-      <div style={uploader}>
-        <input
-          type="file"
-          accept=".csv,application/json"
-          onChange={(e)=>handleFile(e.target.files?.[0])}
-        />
-      </div>
-
-      {features && features.length > 0 && (
-        <div style={hintBox}>
-          <div style={{fontWeight:600, marginBottom:6}}>Required feature columns from API (/features)</div>
-          <div style={{fontSize:12, color:"#374151", lineHeight:"20px"}}>
-            {features.join(", ")}
-          </div>
+      {features.length > 0 ? (
+        <div style={{ fontSize: 13, color: "#374151", marginBottom: 8 }}>
+          <b>Required columns ({features.length}):</b> {features.join(", ")}
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>
+          Loading required feature list…
         </div>
       )}
 
-      {msg && <div style={okBox}>{msg}</div>}
-      {error && <div style={errBox}>{error}</div>}
-
-      <div style={{marginTop:12, textAlign:"right"}}>
-        <button onClick={analyze} style={btnPrimary}>🧠 Analyze with AI →</button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input type="file" accept=".csv,.json" onChange={handleFile} />
+        <button
+          onClick={showTemplateCsv}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid #d1d5db",
+            background: "#f9fafb",
+            cursor: "pointer"
+          }}
+        >
+          ⬇️ Download template
+        </button>
       </div>
+
+      {missing.length > 0 && (
+        <div style={{ marginTop: 8, background: "#fff7ed", border: "1px solid #fed7aa", color: "#9a3412", borderRadius: 8, padding: 10 }}>
+          <b>Missing required columns:</b> {missing.join(", ")}
+        </div>
+      )}
+
+      {unexpected.length > 0 && (
+        <div style={{ marginTop: 8, background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", borderRadius: 8, padding: 10 }}>
+          <b>Unexpected columns (ignored):</b> {unexpected.join(", ")}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div style={{ marginTop: 12, fontSize: 13, color: "#374151" }}>
+          <div><b>Preview:</b> {rows.length} rows ready for prediction.</div>
+          <pre style={{ background: "#f3f4f6", padding: 8, borderRadius: 8, overflow: "auto", maxHeight: 160 }}>
+{JSON.stringify(rows.slice(0, 2), null, 2)}
+          </pre>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+        <button
+          onClick={sendToPredict}
+          disabled={!rows.length || !ok || busy}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: "none",
+            background: (!rows.length || !ok || busy) ? "#9ca3af" : "#2563eb",
+            color: "#fff",
+            cursor: (!rows.length || !ok || busy) ? "not-allowed" : "pointer",
+            fontWeight: 600
+          }}
+        >
+          {busy ? "Analyzing…" : "🧠 Analyze with AI"}
+        </button>
+      </div>
+
+      {err && (
+        <div style={{ marginTop: 12, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", borderRadius: 8, padding: 10 }}>
+          {err}
+        </div>
+      )}
     </div>
   );
 }
-
-const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16 };
-const h2 = { margin:0, marginBottom:12, fontSize:20, fontWeight:700 };
-const uploader = { padding:12, border:"1px dashed #d1d5db", borderRadius:12, background:"#f9fafb" };
-const hintBox = { marginTop:12, padding:12, border:"1px solid #d1d5db", borderRadius:8, background:"#f3f4f6" };
-const okBox = { marginTop:12, padding:12, border:"1px solid #bbf7d0", borderRadius:8, background:"#ecfdf5", color:"#065f46" };
-const errBox = { marginTop:12, padding:12, border:"1px solid #fecaca", borderRadius:8, background:"#fef2f2", color:"#991b1b" };
-const btnPrimary = { padding:"10px 14px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", fontWeight:600, cursor:"pointer" };
