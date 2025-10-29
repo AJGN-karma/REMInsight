@@ -1,7 +1,41 @@
 import React, { useState } from "react";
 
-export default function ResultsDashboard({ results, personalInfo }) {
+// Patient-friendly text generator
+function friendlySummary(predRisk, avgProb, psqiGlobal) {
+  // predRisk: 0=Low, 1=Moderate, 2=High
+  const riskLabel = ["Low", "Moderate", "High"][predRisk] || "Unknown";
+  const p = avgProb?.[predRisk] ?? null;
+
+  let msg = `Your screening suggests a ${riskLabel} psychiatric risk pattern.`;
+  const hints = [];
+
+  if (psqiGlobal != null) {
+    if (psqiGlobal >= 8) hints.push("Your PSQI indicates significant sleep quality concerns.");
+    else if (psqiGlobal >= 5) hints.push("Your PSQI suggests mild-to-moderate sleep disturbance.");
+    else hints.push("Your PSQI suggests generally good sleep quality.");
+  }
+
+  if (riskLabel === "High") {
+    hints.push("Consider consulting a clinician or sleep specialist for a full evaluation.");
+    hints.push("Short-term steps: regular sleep schedule, reduce caffeine, track symptoms.");
+  } else if (riskLabel === "Moderate") {
+    hints.push("We recommend a follow-up screen and sleep hygiene improvements.");
+    hints.push("If distress persists, seeking professional advice is helpful.");
+  } else {
+    hints.push("Keep healthy habits (consistent routine, light exposure, exercise).");
+  }
+
+  const conf = p != null ? ` Model confidence for ${riskLabel}: ${(p*100).toFixed(1)}%.` : "";
+
+  return { riskLabel, text: msg + conf, hints };
+}
+
+export default function ResultsDashboard({ results, personalInfo, uploadedRows, onSave }) {
   const [tab, setTab] = useState("overview");
+
+  const card = {
+    background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16
+  };
 
   if (!results) {
     return (
@@ -15,117 +49,126 @@ export default function ResultsDashboard({ results, personalInfo }) {
     );
   }
 
-  const preds = results.results || [];
-  const riskMap = ["Low", "Medium", "High"];
-  const counts = [0,0,0];
-  preds.forEach(p => { counts[p.pred_risk] = (counts[p.pred_risk]||0)+1; });
-  const total = Math.max(1, preds.length);
-  const percentages = counts.map(n => ((n/total)*100).toFixed(1));
+  // results shape from API:
+  // { results:[{row_index, pred_risk, probs[]}...], features_used, coverage_ratio, missing_columns, extra_columns, warning }
+  const first = results.results?.[0];
+  const riskMap = ["Low","Moderate","High"];
+
+  const avgProb = (() => {
+    const arr = results.results || [];
+    if (!arr.length) return [];
+    const k = arr[0].probs.length;
+    const sums = new Array(k).fill(0);
+    arr.forEach(r => r.probs.forEach((p,i)=> sums[i]+=p));
+    return sums.map(s => s/arr.length);
+  })();
+
+  const psqiGlobal = (() => {
+    if (!uploadedRows?.length) return null;
+    const v = uploadedRows[0].psqi_global;
+    return typeof v === "number" ? v : Number.isFinite(Number(v)) ? Number(v) : null;
+  })();
+
+  const friendly = friendlySummary(first?.pred_risk ?? 1, avgProb, psqiGlobal);
 
   return (
     <div style={card}>
-      <h2 style={h2}>📈 Prediction Summary</h2>
+      <h2 style={{ margin: 0, marginBottom: 12 }}>📈 Prediction Summary</h2>
 
-      <div style={tabs}>
+      {results.warning && (
+        <div style={{ marginBottom: 12, padding: 12, borderRadius: 8, background:"#fef2f2", border:"1px solid #fecaca", color:"#991b1b" }}>
+          <b>Data Quality Warning:</b> {results.warning}
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap: 8, marginBottom: 12 }}>
         {[
           ["overview","📊 Overview"],
-          ["rows","🧾 Per-Row Predictions"],
-          ["probs","🎯 Class Probabilities (Avg)"],
-          ["personal","👤 Personal Info"]
-        ].map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)} style={{...tabBtn, background: tab===k ? "#fff" : "#f3f4f6"}}>
-            {l}
+          ["probs","🎯 Class Probabilities"],
+          ["personal","👤 Patient Details"]
+        ].map(([k, label])=>(
+          <button key={k} onClick={()=>setTab(k)}
+            style={{
+              padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db",
+              background: tab===k ? "#fff" : "#f3f4f6", cursor:"pointer"
+            }}>
+            {label}
           </button>
         ))}
       </div>
 
-      {tab==="overview" && (
+      {tab === "overview" && (
         <>
-          <div style={gridAuto}>
-            <Stat title="Low Risk" value={`${percentages[0]}%`} color="#10b981" />
-            <Stat title="Medium Risk" value={`${percentages[1]}%`} color="#f59e0b" />
-            <Stat title="High Risk" value={`${percentages[2]}%`} color="#ef4444" />
+          <div style={{ display:"grid", gap: 12, gridTemplateColumns:"repeat(auto-fit, minmax(180px,1fr))" }}>
+            <KPI title="Predicted Risk" value={friendly.riskLabel} color={colorForRisk(friendly.riskLabel)} />
+            <KPI title="Coverage" value={`${(results.coverage_ratio*100).toFixed(0)}%`} color="#2563eb" />
+            <KPI title="Rows Analyzed" value={`${results.results?.length || 0}`} color="#0ea5e9" />
+            {psqiGlobal != null && <KPI title="PSQI Global" value={`${psqiGlobal}`} color="#8b5cf6" />}
           </div>
 
-          <div style={panel}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Model Confidence</div>
-            <div style={{ fontSize: 14, color: "#374151" }}>
-              Predicted psychiatric risk category for the first row is{" "}
-              <b>{riskMap[preds[0]?.pred_risk ?? 1]}</b>.
-              Check <b>Per-Row Predictions</b> tab for all rows.
+          <div style={{ marginTop: 16, padding: 16, background:"#f9fafb", borderRadius:12 }}>
+            <div style={{ fontWeight:600, marginBottom: 6 }}>What this means</div>
+            <div style={{ color:"#334155" }}>{friendly.text}</div>
+            <ul style={{ marginTop: 8, color:"#334155" }}>
+              {friendly.hints.map((h,i)=><li key={i}>{h}</li>)}
+            </ul>
+            <div style={{ marginTop: 8, fontSize: 12, color:"#64748b" }}>
+              This is a screening aid—not a diagnosis. If you feel distressed, please consult a healthcare professional.
             </div>
+          </div>
+
+          <div style={{ marginTop: 12, textAlign:"right" }}>
+            <button onClick={onSave} style={btnPrimary}>💾 Save to Patient History</button>
           </div>
         </>
       )}
 
-      {tab==="rows" && (
-        <div style={panel}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Per-Row Predictions</div>
-          <table style={table}>
+      {tab === "probs" && (
+        <div style={{ background:"#f9fafb", padding:16, borderRadius:12 }}>
+          <div style={{ fontWeight:600, marginBottom: 8 }}>Average Class Probabilities</div>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
             <thead>
-              <tr><th>#</th><th>Predicted Risk</th><th>Prob (Low)</th><th>Prob (Med)</th><th>Prob (High)</th></tr>
+              <tr><th style={th}>Class</th><th style={th}>Probability</th></tr>
             </thead>
             <tbody>
-              {preds.map((r,i)=>(
+              {avgProb.map((p,i)=>(
                 <tr key={i}>
-                  <td>{i+1}</td>
-                  <td>{riskMap[r.pred_risk]}</td>
-                  <td>{r.probs?.[0]?.toFixed(3)}</td>
-                  <td>{r.probs?.[1]?.toFixed(3)}</td>
-                  <td>{r.probs?.[2]?.toFixed(3)}</td>
+                  <td style={td}>{riskMap[i] || i}</td>
+                  <td style={td}>{p.toFixed(3)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {tab==="probs" && (
-        <div style={panel}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Average Class Probabilities</div>
-          <table style={table}>
-            <thead><tr><th>Class</th><th>Probability</th></tr></thead>
-            <tbody>
-              {[0,1,2].map(c=>{
-                const avg = preds.length
-                  ? (preds.map(p=>p.probs?.[c]||0).reduce((a,b)=>a+b,0) / preds.length)
-                  : 0;
-                return <tr key={c}><td>{riskMap[c]}</td><td>{avg.toFixed(3)}</td></tr>;
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {tab==="personal" && (
-        <div style={panel}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Subjective Snapshot</div>
-          <div style={grid2}>
-            <InfoRow k="Name" v={personalInfo?.name || "—"} />
-            <InfoRow k="Age" v={personalInfo?.age ?? "—"} />
-            <InfoRow k="Gender" v={personalInfo?.gender || "—"} />
-            <InfoRow k="Sleep Quality" v={
-              personalInfo?.sleepQuality ? `${personalInfo.sleepQuality}/10` : "—"
-            } />
-            <InfoRow k="Sleep Duration" v={
-              personalInfo?.sleepDuration ? `${personalInfo.sleepDuration}h` : "—"
-            } />
+          <div style={{ marginTop: 8, fontSize:12, color:"#64748b" }}>
+            Probabilities are model outputs based on REM/EEG features + PSQI.
           </div>
-          {(personalInfo?.sleepIssues || []).length > 0 && (
-            <div style={{marginTop:12}}>
-              <div style={{fontWeight:600, marginBottom:6}}>Reported Sleep Issues</div>
-              <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
-                {personalInfo.sleepIssues.map(s=>(
-                  <span key={s} style={chip}>{s}</span>
+        </div>
+      )}
+
+      {tab === "personal" && personalInfo && (
+        <div style={{ display:"grid", gap: 12, gridTemplateColumns:"repeat(auto-fit, minmax(220px,1fr))" }}>
+          <InfoCard title="Basic Information">
+            <Row k="Name" v={personalInfo.name || "-"} />
+            <Row k="Age" v={personalInfo.age ?? "-"} />
+            <Row k="Gender" v={personalInfo.gender || "-"} />
+          </InfoCard>
+          <InfoCard title="Sleep Patterns">
+            <Row k="Sleep Quality" v={personalInfo.sleepQuality != null ? `${personalInfo.sleepQuality}/10` : "-"} />
+            <Row k="Sleep Duration" v={personalInfo.sleepDuration != null ? `${personalInfo.sleepDuration}h` : "-"} />
+          </InfoCard>
+          {!!(personalInfo.sleepIssues || []).length && (
+            <InfoCard title="Reported Sleep Issues">
+              <div style={{ display:"flex", flexWrap:"wrap", gap: 8 }}>
+                {personalInfo.sleepIssues.map(x=>(
+                  <span key={x} style={{ background:"#fef3c7", padding:"4px 8px", borderRadius:9999 }}>{x}</span>
                 ))}
               </div>
-            </div>
+            </InfoCard>
           )}
-          {personalInfo?.medicalHistory && (
-            <div style={{marginTop:12}}>
-              <div style={{fontWeight:600, marginBottom:6}}>Medical History</div>
-              <div style={{whiteSpace:"pre-wrap"}}>{personalInfo.medicalHistory}</div>
-            </div>
+          {personalInfo.medicalHistory && (
+            <InfoCard title="Medical History">
+              <div style={{ whiteSpace:"pre-wrap" }}>{personalInfo.medicalHistory}</div>
+            </InfoCard>
           )}
         </div>
       )}
@@ -133,29 +176,34 @@ export default function ResultsDashboard({ results, personalInfo }) {
   );
 }
 
-function Stat({ title, value, color }) {
+function KPI({ title, value, color }) {
   return (
     <div style={{ background:"#f3f4f6", borderRadius:12, padding:12 }}>
+      <div style={{ fontSize:12, color:"#475569" }}>{title}</div>
       <div style={{ fontSize:20, fontWeight:700, color }}>{value}</div>
-      <div style={{ fontSize:12, color:"#374151" }}>{title}</div>
-    </div>
-  );
-}
-function InfoRow({k,v}) {
-  return (
-    <div style={{display:"flex", justifyContent:"space-between", marginBottom:6}}>
-      <div style={{color:"#6b7280"}}>{k}:</div>
-      <div style={{fontWeight:600}}>{v}</div>
     </div>
   );
 }
 
-const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16 };
-const h2 = { margin:0, marginBottom:12, fontSize:20, fontWeight:700 };
-const tabs = { display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" };
-const tabBtn = { padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", cursor:"pointer" };
-const panel = { marginTop:16, background:"#f9fafb", borderRadius:12, padding:16 };
-const gridAuto = { display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))" };
-const table = { width:"100%", borderCollapse:"collapse", fontSize:14 };
-const grid2 = { display:"grid", gap:12, gridTemplateColumns:"1fr 1fr" };
-const chip = { background:"#fef3c7", padding:"4px 8px", borderRadius:9999 };
+function InfoCard({ title, children }) {
+  return (
+    <div style={{ background:"#f9fafb", borderRadius:12, padding:16 }}>
+      <div style={{ fontWeight:600, marginBottom:8 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+function Row({ k, v }) {
+  return (
+    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+      <div style={{ color:"#6b7280" }}>{k}:</div>
+      <div style={{ fontWeight:600 }}>{v}</div>
+    </div>
+  );
+}
+function colorForRisk(r) {
+  return r==="High" ? "#ef4444" : r==="Moderate" ? "#f59e0b" : "#10b981";
+}
+const btnPrimary = { padding:"10px 14px", borderRadius:8, background:"#2563eb", color:"#fff", border:"none", cursor:"pointer" };
+const th = { textAlign:"left", padding:"8px 4px", borderBottom:"1px solid #e5e7eb" };
+const td = { padding:"6px 4px", borderBottom:"1px solid #f1f5f9" };
