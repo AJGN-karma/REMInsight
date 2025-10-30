@@ -15,17 +15,26 @@ from joblib import load
 app = FastAPI(title="REMInsight API", version="1.0.0")
 
 # ---------- CORS setup ----------
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "").rstrip("/")
-origins = [FRONTEND_ORIGIN] if FRONTEND_ORIGIN else ["*"]
-if FRONTEND_ORIGIN.startswith("https://"):
-    origins.append(FRONTEND_ORIGIN.replace("https://", "http://", 1))
+FRONTEND_ORIGINS_RAW = os.getenv("FRONTEND_ORIGIN", "").strip()
+if FRONTEND_ORIGINS_RAW:
+    # Support comma-separated list of origins
+    origins = [o.strip().rstrip("/") for o in FRONTEND_ORIGINS_RAW.split(",") if o.strip()]
+    more = []
+    for o in origins:
+        if o.startswith("https://"):
+            more.append(o.replace("https://", "http://", 1))
+    origins += more
+else:
+    # Allow all if not specified (no credentials)
+    origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=False,  # keep False if using "*" origins
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=3600,
 )
 
 # ---------- config ----------
@@ -64,7 +73,6 @@ def get_features():
 
 @app.get("/sample_row")
 def sample_row():
-    # return a skeleton with all features set to None
     return {name: None for name in features}
 
 @app.post("/predict", response_model=PredictResponse)
@@ -73,7 +81,6 @@ def predict(req: PredictRequest):
         return {"results": [], "features_used": features}
 
     df = pd.DataFrame(req.rows)
-    # reorder / align
     X = df.reindex(columns=features, fill_value=np.nan).values
     X_imp = imputer.transform(X)
     X_scl = scaler.transform(X_imp)
