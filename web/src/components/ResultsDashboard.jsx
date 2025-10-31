@@ -1,8 +1,8 @@
+// web/src/components/ResultsDashboard.jsx
 import React, { useState } from "react";
 
 // Patient-friendly text generator
 function friendlySummary(predRisk, avgProb, psqiGlobal) {
-  // predRisk: 0=Low, 1=Moderate, 2=High
   const riskLabel = ["Low", "Moderate", "High"][predRisk] || "Unknown";
   const p = avgProb?.[predRisk] ?? null;
 
@@ -16,7 +16,7 @@ function friendlySummary(predRisk, avgProb, psqiGlobal) {
   }
 
   if (riskLabel === "High") {
-    hints.push("Consider consulting a clinician or sleep specialist for a full evaluation.");
+    hints.push("Please consult a clinician or sleep specialist for a full evaluation.");
     hints.push("Short-term steps: regular sleep schedule, reduce caffeine, track symptoms.");
   } else if (riskLabel === "Moderate") {
     hints.push("We recommend a follow-up screen and sleep hygiene improvements.");
@@ -26,16 +26,13 @@ function friendlySummary(predRisk, avgProb, psqiGlobal) {
   }
 
   const conf = p != null ? ` Model confidence for ${riskLabel}: ${(p*100).toFixed(1)}%.` : "";
-
   return { riskLabel, text: msg + conf, hints };
 }
 
 export default function ResultsDashboard({ results, personalInfo, uploadedRows, onSave }) {
   const [tab, setTab] = useState("overview");
 
-  const card = {
-    background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16
-  };
+  const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16 };
 
   if (!results) {
     return (
@@ -49,10 +46,8 @@ export default function ResultsDashboard({ results, personalInfo, uploadedRows, 
     );
   }
 
-  // results shape from API:
-  // { results:[{row_index, pred_risk, probs[]}...], features_used, coverage_ratio, missing_columns, extra_columns, warning }
-  const first = results.results?.[0];
   const riskMap = ["Low","Moderate","High"];
+  const first = results.results?.[0];
 
   const avgProb = (() => {
     const arr = results.results || [];
@@ -75,12 +70,6 @@ export default function ResultsDashboard({ results, personalInfo, uploadedRows, 
     <div style={card}>
       <h2 style={{ margin: 0, marginBottom: 12 }}>📈 Prediction Summary</h2>
 
-      {results.warning && (
-        <div style={{ marginBottom: 12, padding: 12, borderRadius: 8, background:"#fef2f2", border:"1px solid #fecaca", color:"#991b1b" }}>
-          <b>Data Quality Warning:</b> {results.warning}
-        </div>
-      )}
-
       <div style={{ display:"flex", gap: 8, marginBottom: 12 }}>
         {[
           ["overview","📊 Overview"],
@@ -101,7 +90,6 @@ export default function ResultsDashboard({ results, personalInfo, uploadedRows, 
         <>
           <div style={{ display:"grid", gap: 12, gridTemplateColumns:"repeat(auto-fit, minmax(180px,1fr))" }}>
             <KPI title="Predicted Risk" value={friendly.riskLabel} color={colorForRisk(friendly.riskLabel)} />
-            <KPI title="Coverage" value={`${(results.coverage_ratio*100).toFixed(0)}%`} color="#2563eb" />
             <KPI title="Rows Analyzed" value={`${results.results?.length || 0}`} color="#0ea5e9" />
             {psqiGlobal != null && <KPI title="PSQI Global" value={`${psqiGlobal}`} color="#8b5cf6" />}
           </div>
@@ -140,23 +128,23 @@ export default function ResultsDashboard({ results, personalInfo, uploadedRows, 
             </tbody>
           </table>
           <div style={{ marginTop: 8, fontSize:12, color:"#64748b" }}>
-            Probabilities are model outputs based on REM/EEG features + PSQI.
+            Probabilities are model outputs based on REM features + PSQI.
           </div>
         </div>
       )}
 
-      {tab === "personal" && personalInfo && (
+      {tab === "personal" && (
         <div style={{ display:"grid", gap: 12, gridTemplateColumns:"repeat(auto-fit, minmax(220px,1fr))" }}>
           <InfoCard title="Basic Information">
-            <Row k="Name" v={personalInfo.name || "-"} />
-            <Row k="Age" v={personalInfo.age ?? "-"} />
-            <Row k="Gender" v={personalInfo.gender || "-"} />
+            <Row k="Name" v={personalInfo?.name || "-"} />
+            <Row k="Age" v={personalInfo?.age ?? "-"} />
+            <Row k="Gender" v={personalInfo?.gender || "-"} />
           </InfoCard>
           <InfoCard title="Sleep Patterns">
-            <Row k="Sleep Quality" v={personalInfo.sleepQuality != null ? `${personalInfo.sleepQuality}/10` : "-"} />
-            <Row k="Sleep Duration" v={personalInfo.sleepDuration != null ? `${personalInfo.sleepDuration}h` : "-"} />
+            <Row k="Sleep Quality" v={personalInfo?.sleepQuality != null ? `${personalInfo.sleepQuality}/10` : "-"} />
+            <Row k="Sleep Duration" v={personalInfo?.sleepDuration != null ? `${personalInfo.sleepDuration}h` : "-"} />
           </InfoCard>
-          {!!(personalInfo.sleepIssues || []).length && (
+          {!!(personalInfo?.sleepIssues || []).length && (
             <InfoCard title="Reported Sleep Issues">
               <div style={{ display:"flex", flexWrap:"wrap", gap: 8 }}>
                 {personalInfo.sleepIssues.map(x=>(
@@ -165,7 +153,7 @@ export default function ResultsDashboard({ results, personalInfo, uploadedRows, 
               </div>
             </InfoCard>
           )}
-          {personalInfo.medicalHistory && (
+          {personalInfo?.medicalHistory && (
             <InfoCard title="Medical History">
               <div style={{ whiteSpace:"pre-wrap" }}>{personalInfo.medicalHistory}</div>
             </InfoCard>
