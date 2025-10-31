@@ -1,3 +1,4 @@
+// web/src/components/PersonalInfoForm.jsx
 import React, { useState } from "react";
 
 export default function PersonalInfoForm({ onComplete }) {
@@ -35,14 +36,14 @@ export default function PersonalInfoForm({ onComplete }) {
     });
   }
 
-  const card = {
-    background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16
-  };
+  const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16 };
+  const inp = { padding:"10px 12px", border:"1px solid #d1d5db", borderRadius:8 };
+  const btnPrimary = { padding:"10px 14px", borderRadius:8, background:"#2563eb", color:"#fff", border:"none", cursor:"pointer" };
 
   return (
     <div style={card}>
       <h2 style={{ margin: 0, marginBottom: 12 }}>👤 Personal Information</h2>
-      <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+      <form onSubmit={submit} style={{ display:"grid", gap:12 }}>
         <input placeholder="Full name" value={form.name}
           onChange={e=>setForm(s=>({...s, name:e.target.value}))}
           style={inp}/>
@@ -77,13 +78,10 @@ export default function PersonalInfoForm({ onComplete }) {
             ))}
           </div>
         </div>
-        <div style={{ textAlign: "right" }}>
+        <div style={{ textAlign:"right" }}>
           <button type="submit" style={btnPrimary}>Save & Continue</button>
         </div>
       </form>
     </div>
   );
 }
-
-const inp = { padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 };
-const btnPrimary = { padding:"10px 14px", borderRadius: 8, background:"#2563eb", color:"#fff", border:"none", cursor:"pointer" };
