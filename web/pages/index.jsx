@@ -1,8 +1,10 @@
+// web/pages/index.jsx
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 
-import { apiHealth, getFeatures, validateRows, predict } from "../src/lib/api";
+import { apiHealth, getFeatures, predict } from "../src/lib/api";
 import { savePredictionRecord } from "../src/lib/firebase";
+
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
 import DataCollection from "../src/components/DataCollection";
 import ResultsDashboard from "../src/components/ResultsDashboard";
@@ -17,7 +19,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  // 1) Health + Features once
+  // Health + Features once
   useEffect(() => {
     (async () => {
       try {
@@ -35,45 +37,37 @@ export default function Home() {
     setStep("data");
   };
 
-  // 2) Data uploaded → validate → predict
+  // Data uploaded -> predict -> save
   const onDataCollected = async (rows) => {
     setErr("");
     setBusy(true);
     try {
       setUploadedRows(rows);
 
-      // Validate schema against API features (catches cause of “always Moderate”)
-      const v = await validateRows(rows);
-      if (v.warning) {
-        // Still allow run, but user sees warning in dashboard
-        console.warn("Validation warning:", v.warning);
-      }
-
       // Predict
+      console.log("[index] sending rows", rows.length, rows[0]);
       const modelResp = await predict(rows);
       setAnalysisResults(modelResp);
       setStep("results");
+
+      // Save to Firebase (async, don't block UI)
+      const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
+      savePredictionRecord({
+        personalInfo: personalInfo || null,
+        rows,
+        apiResponse: modelResp,
+        clientMeta
+      }).then((r) => {
+        if (!r.ok) console.warn("Firestore save warning:", r.error);
+        else console.log("Saved doc id:", r.id);
+      });
+
     } catch (e) {
       setErr(e.message || "Prediction failed");
     } finally {
       setBusy(false);
     }
   };
-
-  async function saveToFirebase() {
-    const payload = {
-      personalInfo: personalInfo || null,
-      rows: uploadedRows || [],
-      apiResponse: analysisResults || null,
-      clientMeta: { userAgent: navigator.userAgent }
-    };
-    const res = await savePredictionRecord(payload);
-    if (!res.ok) {
-      alert("Save failed: " + res.error);
-    } else {
-      alert("Saved with id: " + res.id);
-    }
-  }
 
   const bar = { background:"#fff", borderBottom:"1px solid #e5e7eb", position:"sticky", top:0, zIndex:10 };
 
@@ -121,7 +115,7 @@ export default function Home() {
 
         {step === "data" && (
           <>
-            <DataCollection onDataCollected={onDataCollected} />
+            <DataCollection onDataCollected={onDataCollected} apiFeatures={apiFeatures} />
             <div style={{ marginTop: 12, textAlign: "right" }}>
               <button onClick={()=>setStep("personal")}
                 style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" }}>
@@ -137,7 +131,19 @@ export default function Home() {
               results={analysisResults}
               personalInfo={personalInfo}
               uploadedRows={uploadedRows}
-              onSave={saveToFirebase}
+              onSave={() => {
+                // manual save in case user edits personal info then wants to save again
+                const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
+                savePredictionRecord({
+                  personalInfo: personalInfo || null,
+                  rows: uploadedRows || [],
+                  apiResponse: analysisResults || null,
+                  clientMeta
+                }).then((r)=> {
+                  if (!r.ok) alert("Save failed: " + r.error);
+                  else alert("Saved with id: " + r.id);
+                });
+              }}
             />
             <div style={{ marginTop: 12, display:"flex", justifyContent:"space-between" }}>
               <button onClick={()=>setStep("data")}
