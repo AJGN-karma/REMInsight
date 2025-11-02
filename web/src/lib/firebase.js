@@ -1,45 +1,62 @@
 // web/src/lib/firebase.js
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, doc, getDoc, serverTimestamp } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || ""
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-const missing = Object.entries(firebaseConfig).filter(([, v]) => !v).map(([k]) => k);
-if (missing.length) {
-  console.error(
-    "[Firebase] Missing config keys:",
-    missing.join(", "),
-    "→ set them in Vercel → Project → Settings → Environment Variables."
-  );
+let db = null;
+
+try {
+  const hasConfig = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId;
+  if (!hasConfig) {
+    console.warn("[Firebase] Missing config keys: apiKey/projectId/appId");
+  } else {
+    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    db = getFirestore(app);
+  }
+} catch (err) {
+  console.error("[Firebase] Init failed:", err);
 }
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+export { db };
 
+/** Save one analysis record */
 export async function savePredictionRecord(payload) {
-  const normalized = {
-    createdAt: serverTimestamp(),
-    personalInfo: payload?.personalInfo ?? null,
-    rows: Array.isArray(payload?.rows) ? payload.rows.slice(0, 25) : null,
-    apiResponse: payload?.apiResponse ?? null,
-    clientMeta: {
-      ua: (payload?.clientMeta?.ua || "").slice(0, 300),
-      url: payload?.clientMeta?.url || "",
-      ts: payload?.clientMeta?.ts || Date.now()
-    }
-  };
+  if (!db) return { ok: false, error: "Firebase not configured" };
   try {
-    const docRef = await addDoc(collection(db, "predictions"), normalized);
-    return { ok: true, id: docRef.id };
+    const ref = await addDoc(collection(db, "predictions"), {
+      ...payload,
+      createdAt: serverTimestamp(),
+    });
+    return { ok: true, id: ref.id };
   } catch (e) {
-    // bubble up real error text
-    const msg = (e && (e.message || String(e))) || "Firestore write failed";
-    console.error("[Firebase] savePredictionRecord error:", msg);
-    return { ok: false, error: msg };
+    return { ok: false, error: String(e) };
   }
+}
+
+/** Fetch all predictions (no auth filter for now) */
+export async function listPredictions() {
+  if (!db) throw new Error("Firebase not configured");
+  const snap = await getDocs(collection(db, "predictions"));
+  const rows = [];
+  snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+  // sort by createdAt desc (client-side)
+  return rows.sort((a, b) => {
+    const ta = a.createdAt?.seconds || 0;
+    const tb = b.createdAt?.seconds || 0;
+    return tb - ta;
+  });
+}
+
+/** Get one prediction by Firestore doc id */
+export async function getPredictionById(id) {
+  if (!db) throw new Error("Firebase not configured");
+  const d = await getDoc(doc(db, "predictions", id));
+  if (!d.exists()) throw new Error("Not found");
+  return { id: d.id, ...d.data() };
 }
