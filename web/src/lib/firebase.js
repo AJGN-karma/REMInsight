@@ -1,6 +1,17 @@
 // web/src/lib/firebase.js
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, doc, getDoc, serverTimestamp } from "firebase/firestore";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  getDoc,
+  doc,
+  query,
+  orderBy,
+  limit as qLimit,
+  serverTimestamp
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -9,54 +20,84 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-let db = null;
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+export const db = getFirestore(app);
 
-try {
-  const hasConfig = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId;
-  if (!hasConfig) {
-    console.warn("[Firebase] Missing config keys: apiKey/projectId/appId");
-  } else {
-    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-    db = getFirestore(app);
-  }
-} catch (err) {
-  console.error("[Firebase] Init failed:", err);
-}
-
-export { db };
-
-/** Save one analysis record */
+// ---------- writes ----------
 export async function savePredictionRecord(payload) {
-  if (!db) return { ok: false, error: "Firebase not configured" };
   try {
-    const ref = await addDoc(collection(db, "predictions"), {
-      ...payload,
-      createdAt: serverTimestamp(),
-    });
-    return { ok: true, id: ref.id };
+    const col = collection(db, "predictions");
+    const docRef = await addDoc(col, { ...payload, createdAt: serverTimestamp() });
+    return { ok: true, id: docRef.id };
   } catch (e) {
+    console.error("[Firestore] save failed:", e);
     return { ok: false, error: String(e) };
   }
 }
 
-/** Fetch all predictions (no auth filter for now) */
-export async function listPredictions() {
-  if (!db) throw new Error("Firebase not configured");
-  const snap = await getDocs(collection(db, "predictions"));
-  const rows = [];
-  snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
-  // sort by createdAt desc (client-side)
-  return rows.sort((a, b) => {
-    const ta = a.createdAt?.seconds || 0;
-    const tb = b.createdAt?.seconds || 0;
-    return tb - ta;
+// ---------- reads ----------
+export async function listPredictions(limitCount = 100) {
+  const col = collection(db, "predictions");
+  const q = query(col, orderBy("createdAt", "desc"), qLimit(limitCount));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => {
+    const data = d.data();
+    const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+    return { id: d.id, ...data, createdAtDate: ts, createdAtISO: ts ? ts.toISOString() : "" };
   });
 }
 
-/** Get one prediction by Firestore doc id */
 export async function getPredictionById(id) {
-  if (!db) throw new Error("Firebase not configured");
-  const d = await getDoc(doc(db, "predictions", id));
-  if (!d.exists()) throw new Error("Not found");
-  return { id: d.id, ...d.data() };
+  const ref = doc(db, "predictions", id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+  return { id: snap.id, ...data, createdAtDate: ts, createdAtISO: ts ? ts.toISOString() : "" };
+}
+
+// ---------- CSV export (client-side download) ----------
+export function exportArrayToCSV(filename, rows, headerOrder) {
+  if (!rows?.length) return;
+  const headers = headerOrder || Object.keys(rows[0]);
+  const esc = (v) => {
+    if (v == null) return "";
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers.join(",")]
+    .concat(rows.map(r => headers.map(h => esc(r[h])).join(",")))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Build a compact row for export
+export function normalizeDocForCSV(doc) {
+  const firstRow = Array.isArray(doc.rows) && doc.rows.length ? doc.rows[0] : {};
+  const firstRes = doc.apiResponse?.results?.[0] || {};
+  const probs = firstRes.probs || [];
+  return {
+    id: doc.id,
+    createdAt: doc.createdAtISO || "",
+    name: doc.personalInfo?.name || "",
+    age: doc.personalInfo?.age ?? "",
+    gender: doc.personalInfo?.gender || "",
+    psqi_global: firstRow.psqi_global ?? "",
+    rem_total_min: firstRow.REM_total_min ?? "",
+    rem_latency_min: firstRow.REM_latency_min ?? "",
+    rem_pct: firstRow.REM_pct ?? "",
+    pred_risk: firstRes.pred_risk ?? "",
+    prob_low: probs[0] ?? "",
+    prob_moderate: probs[1] ?? "",
+    prob_high: probs[2] ?? ""
+  };
 }
