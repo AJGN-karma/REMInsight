@@ -42,6 +42,10 @@ export default function Home() {
     setErr("");
     setBusy(true);
     try {
+      if (!Array.isArray(rows) || rows.length === 0) {
+        throw new Error("No rows were uploaded.");
+      }
+
       setUploadedRows(rows);
 
       // Predict
@@ -79,15 +83,29 @@ export default function Home() {
       </Head>
 
       <div style={bar}>
-        <div style={{ maxWidth: 1024, margin:"0 auto", padding:16, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div
+          style={{
+            maxWidth: 1024,
+            margin:"0 auto",
+            padding:16,
+            display:"flex",
+            alignItems:"center",
+            justifyContent:"space-between"
+          }}
+        >
           <div style={{ fontSize: 18, fontWeight: 700 }}>🧠 REMInsight</div>
-          <div style={{ fontSize: 14 }}>
-            API:{" "}
-            {health?.status === "ok" || health?.ok ? (
-              <span style={{ color:"#16a34a", fontWeight:600 }}>UP</span>
-            ) : (
-              <span style={{ color:"#dc2626", fontWeight:600 }}>DOWN</span>
-            )}
+
+          {/* Updated right side: History link + API status */}
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <a href="/history" style={{ textDecoration:"none", color:"#2563eb" }}>History</a>
+            <div style={{ fontSize: 14 }}>
+              API:{" "}
+              {health?.status === "ok" || health?.ok ? (
+                <span style={{ color:"#16a34a", fontWeight:600 }}>UP</span>
+              ) : (
+                <span style={{ color:"#dc2626", fontWeight:600 }}>DOWN</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -117,8 +135,10 @@ export default function Home() {
           <>
             <DataCollection onDataCollected={onDataCollected} apiFeatures={apiFeatures} />
             <div style={{ marginTop: 12, textAlign: "right" }}>
-              <button onClick={()=>setStep("personal")}
-                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" }}>
+              <button
+                onClick={()=>setStep("personal")}
+                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" }}
+              >
                 ← Back
               </button>
             </div>
@@ -146,12 +166,16 @@ export default function Home() {
               }}
             />
             <div style={{ marginTop: 12, display:"flex", justifyContent:"space-between" }}>
-              <button onClick={()=>setStep("data")}
-                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" }}>
+              <button
+                onClick={()=>setStep("data")}
+                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" }}
+              >
                 ← Back
               </button>
-              <button onClick={() => { setAnalysisResults(null); setStep("personal"); }}
-                style={{ padding:"8px 12px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", cursor:"pointer", fontWeight:600 }}>
+              <button
+                onClick={() => { setAnalysisResults(null); setStep("personal"); }}
+                style={{ padding:"8px 12px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", cursor:"pointer", fontWeight:600 }}
+              >
                 New Analysis
               </button>
             </div>
