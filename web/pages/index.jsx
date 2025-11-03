@@ -3,7 +3,10 @@ import React, { useEffect, useState } from "react";
 import Head from "next/head";
 
 import { apiHealth, getFeatures, predict } from "../src/lib/api";
-import { savePredictionRecord } from "../src/lib/firebase";
+import {
+  savePredictionRecord,
+  registerOrLogin,   // ✅ use auth if provided
+} from "../src/lib/firebase";
 
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
 import DataCollection from "../src/components/DataCollection";
@@ -13,6 +16,7 @@ export default function Home() {
   const [health, setHealth] = useState(null);
   const [step, setStep] = useState("personal"); // personal -> data -> results
   const [personalInfo, setPersonalInfo] = useState(null);
+  const [userId, setUserId] = useState(null);   // ✅ stable patient id (auth uid or manual id)
   const [uploadedRows, setUploadedRows] = useState(null);
   const [apiFeatures, setApiFeatures] = useState([]);
   const [analysisResults, setAnalysisResults] = useState(null);
@@ -32,9 +36,35 @@ export default function Home() {
     })();
   }, []);
 
-  const onPersonalComplete = (data) => {
-    setPersonalInfo(data);
-    setStep("data");
+  // Step 1 complete → capture info and prepare user id
+  const onPersonalComplete = async (data) => {
+    try {
+      setErr("");
+      setBusy(true);
+
+      // Save locally
+      setPersonalInfo(data);
+
+      // 3 possible sources of ID:
+      // A) If PersonalInfo provides email+password, auth → use Firebase uid.
+      // B) If PersonalInfo provides custom userId, use that.
+      // C) Else generate a simple ID (not recommended for prod).
+      if (data.email && data.password) {
+        const user = await registerOrLogin(data.email, data.password);
+        setUserId(user.uid);
+      } else if (data.userId) {
+        setUserId(String(data.userId));
+      } else {
+        const genId = `pt_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+        setUserId(genId);
+      }
+
+      setStep("data");
+    } catch (e) {
+      setErr(e.message || "Failed to initialize user.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   // Data uploaded -> predict -> save
@@ -45,6 +75,9 @@ export default function Home() {
       if (!Array.isArray(rows) || rows.length === 0) {
         throw new Error("No rows were uploaded.");
       }
+      if (!userId) {
+        throw new Error("User is not initialized yet. Please complete Personal Information.");
+      }
 
       setUploadedRows(rows);
 
@@ -54,9 +87,13 @@ export default function Home() {
       setAnalysisResults(modelResp);
       setStep("results");
 
-      // Save to Firebase (async, don't block UI)
-      const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
-      savePredictionRecord({
+      // Save to Firebase under users/{userId}/predictions/*
+      const clientMeta = {
+        ua: navigator.userAgent,
+        url: window.location.href,
+        ts: Date.now(),
+      };
+      savePredictionRecord(userId, {
         personalInfo: personalInfo || null,
         rows,
         apiResponse: modelResp,
@@ -95,9 +132,10 @@ export default function Home() {
         >
           <div style={{ fontSize: 18, fontWeight: 700 }}>🧠 REMInsight</div>
 
-          {/* Updated right side: History link + API status */}
+          {/* Right side: quick links + API status */}
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <a href="/history" style={{ textDecoration:"none", color:"#2563eb" }}>History</a>
+            <a href="/admin" style={{ textDecoration:"none", color:"#2563eb" }}>Admin</a>
             <div style={{ fontSize: 14 }}>
               API:{" "}
               {health?.status === "ok" || health?.ok ? (
@@ -137,7 +175,7 @@ export default function Home() {
             <div style={{ marginTop: 12, textAlign: "right" }}>
               <button
                 onClick={()=>setStep("personal")}
-                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" }}
+                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5d6", background:"#fff", cursor:"pointer" }}
               >
                 ← Back
               </button>
@@ -152,9 +190,9 @@ export default function Home() {
               personalInfo={personalInfo}
               uploadedRows={uploadedRows}
               onSave={() => {
-                // manual save in case user edits personal info then wants to save again
+                if (!userId) return alert("User not initialized");
                 const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
-                savePredictionRecord({
+                savePredictionRecord(userId, {
                   personalInfo: personalInfo || null,
                   rows: uploadedRows || [],
                   apiResponse: analysisResults || null,
