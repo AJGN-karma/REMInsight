@@ -5,44 +5,71 @@ import Link from "next/link";
 import {
   listAllPredictions,
   exportArrayToCSV,
-  normalizeDocForCSV
+  normalizeDocForCSV,
+  auth,
 } from "../src/lib/firebase";
-
-// Optional PDF export (uncomment if you added jspdf deps in package.json)
-// import jsPDF from "jspdf";
-// import "jspdf-autotable";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 const PIN = process.env.NEXT_PUBLIC_ADMIN_PIN;
+const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_UID;
 
 export default function HistoryPage() {
-  const [authOk, setAuthOk] = useState(false);
+  const [pinOk, setPinOk] = useState(false);
+  const [adminOk, setAdminOk] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState("");
 
+  // ---- PIN gate ----
   useEffect(() => {
-    // simple client-side PIN gate
     const cached = typeof window !== "undefined" ? sessionStorage.getItem("hist_auth") : null;
     if (cached && PIN && cached === PIN) {
-      setAuthOk(true);
+      setPinOk(true);
     } else {
-      // eslint-disable-next-line no-alert
-      const attempt = prompt("Enter admin PIN to view history:");
+      const attempt = typeof window !== "undefined" ? prompt("Enter admin PIN to view history:") : "";
       if (PIN && attempt === PIN) {
         sessionStorage.setItem("hist_auth", attempt);
-        setAuthOk(true);
+        setPinOk(true);
       } else {
-        setErr("Not authorized.");
+        setErr("Not authorized (PIN).");
       }
     }
   }, []);
 
+  // ---- Admin Firebase login (email/password) ----
   useEffect(() => {
-    if (!authOk) return;
+    if (!pinOk) return;
+    (async () => {
+      try {
+        // If already signed in & matches admin UID → ok
+        if (auth.currentUser && auth.currentUser.uid === ADMIN_UID) {
+          setAdminOk(true);
+          return;
+        }
+        // Otherwise prompt for admin credentials
+        const email = prompt("Admin email:");
+        const password = prompt("Admin password:");
+        if (!email || !password) throw new Error("Admin credentials required.");
+        const userCred = await signInWithEmailAndPassword(auth, email, password);
+        if (userCred.user.uid !== ADMIN_UID) {
+          await signOut(auth);
+          throw new Error("This account is not the configured admin.");
+        }
+        setAdminOk(true);
+      } catch (e) {
+        setErr(e.message || String(e));
+      }
+    })();
+  }, [pinOk]);
+
+  // ---- Load data (admin only) ----
+  useEffect(() => {
+    if (!adminOk) return;
     (async () => {
       setLoading(true);
       try {
-        const data = await listAllPredictions(200);
+        const data = await listAllPredictions(500);
         setRows(data);
       } catch (e) {
         setErr(String(e));
@@ -50,7 +77,7 @@ export default function HistoryPage() {
         setLoading(false);
       }
     })();
-  }, [authOk]);
+  }, [adminOk]);
 
   const summary = useMemo(() => {
     const out = { total: rows.length, low: 0, mod: 0, high: 0 };
@@ -72,29 +99,7 @@ export default function HistoryPage() {
     ]);
   }
 
-  // Optional PDF export example
-  // function exportPDF() {
-  //   const doc = new jsPDF();
-  //   doc.text("REMInsight - Predictions", 14, 16);
-  //   const head = [["When","Name","Age","Gender","PSQI","Risk"]];
-  //   const body = rows.map(r => {
-  //     const firstRow = Array.isArray(r.rows) && r.rows.length ? r.rows[0] : {};
-  //     const pred = r.apiResponse?.results?.[0]?.pred_risk ?? null;
-  //     const riskLabel = pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
-  //     return [
-  //       r.createdAtISO || "-",
-  //       r.personalInfo?.name || "-",
-  //       r.personalInfo?.age ?? "-",
-  //       r.personalInfo?.gender || "-",
-  //       firstRow.psqi_global ?? "-",
-  //       riskLabel
-  //     ];
-  //   });
-  //   doc.autoTable({ head, body, startY: 22 });
-  //   doc.save("predictions.pdf");
-  // }
-
-  if (!authOk) {
+  if (!pinOk || !adminOk) {
     return (
       <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
         <Head><title>History</title></Head>
@@ -109,10 +114,9 @@ export default function HistoryPage() {
 
       <div style={{ display: "flex", justifyContent:"space-between", alignItems:"center", marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>📚 Analyzed Patients</h1>
-        <div style={{ display:"flex", gap:8 }}>
-          <Link href="/" style={{ lineHeight:"32px" }}>← Back</Link>
+        <div>
+          <Link href="/" style={{ marginRight: 12 }}>← Back to App</Link>
           <button onClick={exportCSV} style={btnPrimary}>⬇ Export CSV</button>
-          {/* <button onClick={exportPDF} style={btnSecondary}>⬇ Export PDF</button> */}
         </div>
       </div>
 
@@ -159,14 +163,14 @@ export default function HistoryPage() {
                 const riskLabel = pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
                 return (
                   <tr key={r.id}>
-                    <td style={td}>{r.createdAtISO || "-"}</td>
+                    <td style={td}>{r.createdAtDate ? r.createdAtDate.toLocaleString() : "-"}</td>
                     <td style={td}>{r.personalInfo?.name || "-"}</td>
                     <td style={td}>{r.personalInfo?.age ?? "-"}</td>
                     <td style={td}>{r.personalInfo?.gender || "-"}</td>
                     <td style={td}>{firstRow.psqi_global ?? "-"}</td>
                     <td style={{ ...td, fontWeight: 600, color: colorForRisk(riskLabel) }}>{riskLabel}</td>
                     <td style={td}>
-                      <Link href={`/patient/${r.id}`} style={{ color:"#2563eb" }}>View</Link>
+                      <Link href={`/patient/${r.userId}/${r.id}`} style={{ color:"#2563eb" }}>View</Link>
                     </td>
                   </tr>
                 );
@@ -188,15 +192,10 @@ function KPI({ title, value, color }) {
   );
 }
 
-function pct(n, total) {
-  if (!total) return "0%";
-  return `${(100 * n / total).toFixed(1)}%`;
-}
-function colorForRisk(r) {
-  return r==="High" ? "#ef4444" : r==="Moderate" ? "#f59e0b" : "#10b981";
-}
+function pct(n, total) { if (!total) return "0%"; return `${(100 * n / total).toFixed(1)}%`; }
+function colorForRisk(r) { return r==="High" ? "#ef4444" : r==="Moderate" ? "#f59e0b" : "#10b981"; }
+
 const btnPrimary = { padding:"8px 12px", borderRadius:8, background:"#2563eb", color:"#fff", border:"none", cursor:"pointer" };
-// const btnSecondary = { padding:"8px 12px", borderRadius:8, background:"#334155", color:"#fff", border:"none", cursor:"pointer" };
 const table = { width:"100%", borderCollapse:"collapse", fontSize:14, minWidth: 720 };
 const th = { textAlign:"left", padding:"10px 8px", borderBottom:"1px solid #e2e8f0" };
 const td = { padding:"8px 8px", borderBottom:"1px solid #f1f5f9" };
