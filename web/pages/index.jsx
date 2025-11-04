@@ -4,8 +4,10 @@ import Head from "next/head";
 
 import { apiHealth, getFeatures, predict } from "../src/lib/api";
 import {
+  ensureAnonAuth,
+  registerOrLogin,
   savePredictionRecord,
-  registerOrLogin,   // ✅ use auth if provided
+  upsertUserProfile,
 } from "../src/lib/firebase";
 
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
@@ -16,7 +18,7 @@ export default function Home() {
   const [health, setHealth] = useState(null);
   const [step, setStep] = useState("personal"); // personal -> data -> results
   const [personalInfo, setPersonalInfo] = useState(null);
-  const [userId, setUserId] = useState(null);   // ✅ stable patient id (auth uid or manual id)
+  const [userId, setUserId] = useState(null);
   const [uploadedRows, setUploadedRows] = useState(null);
   const [apiFeatures, setApiFeatures] = useState([]);
   const [analysisResults, setAnalysisResults] = useState(null);
@@ -41,22 +43,26 @@ export default function Home() {
     try {
       setErr("");
       setBusy(true);
-
-      // Save locally
       setPersonalInfo(data);
 
-      // 3 possible sources of ID:
-      // A) If PersonalInfo provides email+password, auth → use Firebase uid.
-      // B) If PersonalInfo provides custom userId, use that.
-      // C) Else generate a simple ID (not recommended for prod).
+      // Preferred: Email/Password → real uid
       if (data.email && data.password) {
         const user = await registerOrLogin(data.email, data.password);
         setUserId(user.uid);
-      } else if (data.userId) {
-        setUserId(String(data.userId));
+        await upsertUserProfile(user.uid, {
+          name: data.name || "",
+          age: data.age ?? null,
+          gender: data.gender || "",
+        });
       } else {
-        const genId = `pt_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-        setUserId(genId);
+        // Otherwise anonymous
+        const user = await ensureAnonAuth();
+        setUserId(user.uid);
+        await upsertUserProfile(user.uid, {
+          name: data.name || "",
+          age: data.age ?? null,
+          gender: data.gender || "",
+        });
       }
 
       setStep("data");
@@ -76,7 +82,9 @@ export default function Home() {
         throw new Error("No rows were uploaded.");
       }
       if (!userId) {
-        throw new Error("User is not initialized yet. Please complete Personal Information.");
+        // Guard (shouldn’t happen if personal step completed)
+        const user = await ensureAnonAuth();
+        setUserId(user.uid);
       }
 
       setUploadedRows(rows);
@@ -87,17 +95,13 @@ export default function Home() {
       setAnalysisResults(modelResp);
       setStep("results");
 
-      // Save to Firebase under users/{userId}/predictions/*
-      const clientMeta = {
-        ua: navigator.userAgent,
-        url: window.location.href,
-        ts: Date.now(),
-      };
+      // Save to Firestore under users/{userId}/predictions/*
+      const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
       savePredictionRecord(userId, {
         personalInfo: personalInfo || null,
         rows,
         apiResponse: modelResp,
-        clientMeta
+        clientMeta,
       }).then((r) => {
         if (!r.ok) console.warn("Firestore save warning:", r.error);
         else console.log("Saved doc id:", r.id);
@@ -122,12 +126,8 @@ export default function Home() {
       <div style={bar}>
         <div
           style={{
-            maxWidth: 1024,
-            margin:"0 auto",
-            padding:16,
-            display:"flex",
-            alignItems:"center",
-            justifyContent:"space-between"
+            maxWidth: 1024, margin:"0 auto", padding:16,
+            display:"flex", alignItems:"center", justifyContent:"space-between"
           }}
         >
           <div style={{ fontSize: 18, fontWeight: 700 }}>🧠 REMInsight</div>
@@ -175,7 +175,7 @@ export default function Home() {
             <div style={{ marginTop: 12, textAlign: "right" }}>
               <button
                 onClick={()=>setStep("personal")}
-                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5d6", background:"#fff", cursor:"pointer" }}
+                style={{ padding:"8px 12px", borderRadius:8, border:"1px solid #d1d5db", background:"#fff", cursor:"pointer" }}
               >
                 ← Back
               </button>
