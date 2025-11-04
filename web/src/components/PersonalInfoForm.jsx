@@ -1,6 +1,10 @@
 // web/src/components/PersonalInfoForm.jsx
 import React, { useState } from "react";
-import { uploadMedicalFile, registerOrLogin } from "../lib/firebase";
+import {
+  registerOrLogin,
+  ensureAnonAuth,
+  uploadMedicalFileBase64,
+} from "../lib/firebase";
 
 export default function PersonalInfoForm({ onComplete }) {
   const [form, setForm] = useState({
@@ -11,11 +15,10 @@ export default function PersonalInfoForm({ onComplete }) {
     sleepDuration: 7,
     sleepIssues: [],
     medicalHistory: "",
-    medicalFiles: []
   });
 
   const [auth, setAuth] = useState({ email: "", password: "" });
-  const [uploadFiles, setUploadFiles] = useState([]);
+  const [uploadFiles, setUploadFiles] = useState([]); // File[]
   const [uploading, setUploading] = useState(false);
 
   const sleepIssueOptions = [
@@ -33,41 +36,47 @@ export default function PersonalInfoForm({ onComplete }) {
   }
 
   function handleFileChange(e) {
-    const files = Array.from(e.target.files);
-    setUploadFiles(files);
+    setUploadFiles(Array.from(e.target.files || []));
   }
 
   async function submit(e) {
     e.preventDefault();
     setUploading(true);
-
     try {
-      // 1️⃣ Login / Register the user (get unique patient ID)
-      const user = await registerOrLogin(auth.email, auth.password);
-      const userId = user.uid;
-
-      // 2️⃣ Upload medical reports if provided
-      const uploadedReports = [];
-      for (const file of uploadFiles) {
-        let label = prompt(`Enter name or description for ${file.name}`);
-        while (!label || label.trim() === "") {
-          label = prompt("⚠️ File name is required. Enter a valid description:");
-        }
-        const res = await uploadMedicalFile(file, label, userId);
-        uploadedReports.push(res);
+      // 1) Identify/create user
+      let userId = "";
+      if (auth.email && auth.password) {
+        const u = await registerOrLogin(auth.email, auth.password);
+        userId = u.uid;
+      } else {
+        const u = await ensureAnonAuth();
+        userId = u.uid;
       }
 
-      // 3️⃣ Send all collected info back to main flow
+      // 2) Upload PDFs to Firestore as Base64
+      const uploadedReports = [];
+      for (const file of uploadFiles) {
+        let label = prompt(`Enter report name/description for "${file.name}"`);
+        while (!label || !label.trim()) {
+          label = prompt("⚠️ Report name is required. Please enter a valid description:");
+        }
+        // eslint-disable-next-line no-await-in-loop
+        const meta = await uploadMedicalFileBase64(file, label.trim(), userId);
+        uploadedReports.push(meta); // {id,name,mimeType,sizeBytes,chunked}
+      }
+
+      // 3) Pass to parent
       onComplete({
         ...form,
         age: Number(form.age || 0),
         sleepQuality: Number(form.sleepQuality || 0),
         sleepDuration: Number(form.sleepDuration || 0),
-        medicalFiles: uploadedReports,
+        medicalFiles: uploadedReports, // store references in predictions
         userId,
+        email: auth.email || "",
       });
     } catch (err) {
-      alert("Error while saving personal info: " + err.message);
+      alert("Error while saving personal info: " + (err?.message || String(err)));
       console.error(err);
     } finally {
       setUploading(false);
@@ -114,9 +123,11 @@ export default function PersonalInfoForm({ onComplete }) {
         <div>
           <div style={label}>Sleep Quality (1–10)</div>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <input type="range" min="1" max="10" value={form.sleepQuality}
+            <input
+              type="range" min="1" max="10" value={form.sleepQuality}
               onChange={e=>setForm(s=>({...s, sleepQuality:Number(e.target.value)}))}
-              style={{ flex:1 }}/>
+              style={{ flex:1 }}
+            />
             <div style={{ width:40, textAlign:"center", fontWeight:700 }}>{form.sleepQuality}</div>
           </div>
           <div style={{ fontSize:12, color:"#64748b", marginTop:4 }}>
@@ -126,10 +137,12 @@ export default function PersonalInfoForm({ onComplete }) {
 
         <div>
           <div style={label}>Average Sleep Duration (hours)</div>
-          <input placeholder="e.g., 7.5" type="number" step="0.5"
+          <input
+            placeholder="e.g., 7.5" type="number" step="0.5"
             value={form.sleepDuration}
             onChange={e=>setForm(s=>({...s, sleepDuration:e.target.value}))}
-            style={inp}/>
+            style={inp}
+          />
           <div style={{ fontSize:12, color:"#64748b", marginTop:4 }}>
             Recommended: 7–9 hours for most adults.
           </div>
@@ -137,24 +150,30 @@ export default function PersonalInfoForm({ onComplete }) {
 
         <div>
           <div style={label}>Medical History (optional)</div>
-          <textarea placeholder="Any relevant conditions, medications, etc." rows={3}
+          <textarea
+            placeholder="Any relevant conditions, medications, etc."
+            rows={3}
             value={form.medicalHistory}
             onChange={e=>setForm(s=>({...s, medicalHistory:e.target.value}))}
-            style={inp}/>
+            style={inp}
+          />
         </div>
 
-        {/* 📎 File Upload Section */}
+        {/* 📎 File Upload Section (PDFs) */}
         <div>
-          <div style={label}>Upload Medical Reports (PDF only)</div>
-          <input type="file" accept=".pdf" multiple onChange={handleFileChange}/>
+          <div style={label}>Upload Medical Reports (PDF)</div>
+          <input type="file" accept="application/pdf" multiple onChange={handleFileChange}/>
           {uploadFiles.length > 0 && (
             <div style={{ fontSize:13, marginTop:6, color:"#374151" }}>
               Selected: {uploadFiles.map(f => f.name).join(", ")}
+              <div style={{ fontSize:12, color:"#64748b" }}>
+                Large PDFs are chunked automatically (Firestore limit ≈ 1 MB/doc).
+              </div>
             </div>
           )}
         </div>
 
-        {/* 🔐 Auth Section for ID allocation */}
+        {/* 🔐 Auth → real patient ID */}
         <div>
           <div style={label}>Login / Registration (for Patient ID)</div>
           <input placeholder="Email address" type="email"
@@ -164,7 +183,7 @@ export default function PersonalInfoForm({ onComplete }) {
             value={auth.password} onChange={e=>setAuth(s=>({...s, password:e.target.value}))}
             style={inp}/>
           <div style={{ fontSize:12, color:"#64748b", marginTop:4 }}>
-            If new, this will create your account automatically.
+            If new, an account is created automatically; otherwise you’ll be logged in.
           </div>
         </div>
 
