@@ -5,10 +5,13 @@ import Link from "next/link";
 import {
   listAllPredictions,
   exportArrayToCSV,
-  normalizeDocForCSV
+  normalizeDocForCSV,
+  auth,
 } from "../src/lib/firebase";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 const PIN = process.env.NEXT_PUBLIC_ADMIN_PIN;
+const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_UID;
 
 function riskLabel(pred) {
   return pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
@@ -18,7 +21,9 @@ function riskColor(label) {
 }
 
 export default function AdminPage() {
-  const [authOk, setAuthOk] = useState(false);
+  const [pinOk, setPinOk] = useState(false);
+  const [adminOk, setAdminOk] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState("");
@@ -31,58 +36,78 @@ export default function AdminPage() {
 
   const canvasRef = useRef(null);
 
-  // PIN gate
+  // ---- PIN gate ----
   useEffect(() => {
     const cached = typeof window !== "undefined" ? sessionStorage.getItem("admin_auth") : null;
     if (cached && PIN && cached === PIN) {
-      setAuthOk(true);
+      setPinOk(true);
     } else {
-      const attempt = typeof window !== "undefined" ? prompt("Enter admin PIN:") : null;
+      const attempt = prompt("Enter admin PIN:");
       if (PIN && attempt === PIN) {
         sessionStorage.setItem("admin_auth", attempt);
-        setAuthOk(true);
+        setPinOk(true);
       } else {
-        setErr("Not authorized.");
+        setErr("Not authorized (PIN).");
         setLoading(false);
       }
     }
   }, []);
 
-  // Load data
+  // ---- Admin Firebase login ----
   useEffect(() => {
-    if (!authOk) return;
+    if (!pinOk) return;
     (async () => {
-      setLoading(true);
       try {
-        const data = await listAllPredictions(1000);
-        const withDate = data.map(d => ({
-          ...d,
-          createdAtDate: d.createdAtISO ? new Date(d.createdAtISO) : null
-        }));
-        setRows(withDate);
+        if (auth.currentUser && auth.currentUser.uid === ADMIN_UID) {
+          setAdminOk(true);
+          return;
+        }
+        const email = prompt("Admin email:");
+        const password = prompt("Admin password:");
+        if (!email || !password) throw new Error("Admin credentials required.");
+        const userCred = await signInWithEmailAndPassword(auth, email, password);
+        if (userCred.user.uid !== ADMIN_UID) {
+          await signOut(auth);
+          throw new Error("This account is not the configured admin.");
+        }
+        setAdminOk(true);
       } catch (e) {
-        setErr(String(e));
-      } finally {
-        setLoading(false);
+        setErr(e.message || String(e));
       }
     })();
-  }, [authOk]);
+  }, [pinOk]);
 
-  // Derived filtered view
+  // ---- Load data ----
+  async function loadData() {
+    setLoading(true);
+    try {
+      const data = await listAllPredictions(1000);
+      setRows(data);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (adminOk) loadData();
+  }, [adminOk]);
+
+  // --- derived view with filters ---
   const filtered = useMemo(() => {
     let out = rows;
 
     // date filter (client-side)
     if (start || end) {
       const fromMs = start ? new Date(start).getTime() : -Infinity;
-      const toMs = end ? new Date(end).getTime() + 24*60*60*1000 - 1 : Infinity; // end of day
+      const toMs = end ? new Date(end).getTime() + 24*60*60*1000 - 1 : Infinity;
       out = out.filter(r => {
         const t = r.createdAtDate ? r.createdAtDate.getTime() : 0;
         return t >= fromMs && t <= toMs;
       });
     }
 
-    // risk filter
     if (risk !== "all") {
       out = out.filter(r => {
         const pr = r.apiResponse?.results?.[0]?.pred_risk;
@@ -91,47 +116,43 @@ export default function AdminPage() {
       });
     }
 
-    // text search (name/id/gender/age)
     if (qText.trim()) {
       const t = qText.trim().toLowerCase();
       out = out.filter(r =>
         (r.personalInfo?.name || "").toLowerCase().includes(t) ||
         (r.personalInfo?.gender || "").toLowerCase().includes(t) ||
         String(r.personalInfo?.age ?? "").includes(t) ||
-        (r.id || "").toLowerCase().includes(t)
+        (r.id || "").toLowerCase().includes(t) ||
+        (r.userId || "").toLowerCase().includes(t)
       );
     }
 
     return out;
   }, [rows, start, end, risk, qText]);
 
-  // Summary
+  // --- summary ---
   const summary = useMemo(() => {
     const s = { total: filtered.length, low: 0, mod: 0, high: 0 };
     filtered.forEach(r => {
       const pr = r.apiResponse?.results?.[0]?.pred_risk;
-      if (pr === 0) s.low++;
-      else if (pr === 1) s.mod++;
-      else if (pr === 2) s.high++;
+      if (pr === 0) s.low++; else if (pr === 1) s.mod++; else if (pr === 2) s.high++;
     });
     return s;
   }, [filtered]);
 
-  // Trend chart data (records per day)
+  // --- tiny trends chart (per day counts) ---
   const trendData = useMemo(() => {
     const map = new Map(); // yyyy-mm-dd -> count
     filtered.forEach(r => {
-      const d = r.createdAtDate;
+      const d = r.createdAtDate ? r.createdAtDate : null;
       if (!d) return;
       const key = d.toISOString().slice(0,10);
       map.set(key, (map.get(key) || 0) + 1);
     });
-    return Array.from(map.entries())
-      .sort(([a],[b]) => a.localeCompare(b))
-      .map(([date, count]) => ({ date, count }));
+    const keys = Array.from(map.keys()).sort();
+    return keys.map(k => ({ date: k, count: map.get(k) }));
   }, [filtered]);
 
-  // Render trend line on canvas
   useEffect(() => {
     const cvs = canvasRef.current;
     if (!cvs) return;
@@ -141,7 +162,6 @@ export default function AdminPage() {
 
     if (!trendData.length) {
       ctx.fillStyle = "#64748b";
-      ctx.font = "12px sans-serif";
       ctx.fillText("No trend data", 10, 20);
       return;
     }
@@ -166,7 +186,7 @@ export default function AdminPage() {
     });
     ctx.stroke();
 
-    // date labels (first/last)
+    // ticks
     ctx.fillStyle = "#475569";
     ctx.font = "12px sans-serif";
     if (trendData.length >= 1) {
@@ -177,14 +197,14 @@ export default function AdminPage() {
 
   function exportCSV() {
     const normalized = filtered.map(normalizeDocForCSV);
-    exportArrayToCSV("admin_predictions.csv", normalized, [
+    exportArrayToCSV("predictions_filtered.csv", normalized, [
       "id","createdAt","userId","name","age","gender",
       "psqi_global","rem_total_min","rem_latency_min","rem_pct",
       "pred_risk","prob_low","prob_moderate","prob_high"
     ]);
   }
 
-  if (!authOk) {
+  if (!pinOk || !adminOk) {
     return (
       <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
         <Head><title>Admin</title></Head>
@@ -210,8 +230,9 @@ export default function AdminPage() {
       <div style={panel}>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
           <div>
-            <div style={label}>Search (name/id)</div>
-            <input value={qText} onChange={e=>setQText(e.target.value)} placeholder="e.g., JJ or doc id" style={inp}/>
+            <div style={label}>Search (name/id/userId)</div>
+            <input value={qText} onChange={e=>setQText(e.target.value)} placeholder="e.g., JJ or doc id"
+              style={inp}/>
           </div>
           <div>
             <div style={label}>Risk</div>
@@ -231,10 +252,16 @@ export default function AdminPage() {
             <input type="date" value={end} onChange={e=>setEnd(e.target.value)} style={inp}/>
           </div>
         </div>
+        <div style={{ marginTop:12, display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <button onClick={loadData} style={btn}>Apply</button>
+          <button onClick={()=>{ setQText(""); setRisk("all"); setStart(""); setEnd(""); loadData(); }} style={btn}>
+            Reset
+          </button>
+        </div>
       </div>
 
       {/* Summary + trend */}
-      <div style={{ display:"grid", gridTemplateColumns:"2fr 3fr", gap:12, margin:"12px 0 16px" }}>
+      <div style={{ display:"grid", gridTemplateColumns:"2fr 3fr", gap:12, marginBottom:16 }}>
         <div style={panel}>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
             <KPI title="Total" value={summary.total} color="#334155" />
@@ -266,7 +293,9 @@ export default function AdminPage() {
                   <th style={th}>Gender</th>
                   <th style={th}>PSQI</th>
                   <th style={th}>Risk</th>
+                  <th style={th}>User ID</th>
                   <th style={th}>Doc ID</th>
+                  <th style={th}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -282,7 +311,11 @@ export default function AdminPage() {
                       <td style={td}>{r.personalInfo?.gender || "-"}</td>
                       <td style={td}>{firstRow.psqi_global ?? "-"}</td>
                       <td style={{ ...td, fontWeight:600, color:riskColor(label) }}>{label}</td>
+                      <td style={td}>{r.userId}</td>
                       <td style={td}>{r.id}</td>
+                      <td style={td}>
+                        <Link href={`/patient/${r.userId}/${r.id}`} style={{ color:"#2563eb" }}>View</Link>
+                      </td>
                     </tr>
                   );
                 })}
@@ -307,7 +340,8 @@ function KPI({ title, value, color }) {
 const panel = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:8, padding:12 };
 const label = { fontSize:12, color:"#475569", marginBottom:6 };
 const inp = { padding:"8px 10px", border:"1px solid #e2e8f0", borderRadius:8, width:"100%" };
-const btnPrimary = { padding:"8px 12px", borderRadius:8, background:"#2563eb", color:"#fff", border:"none", cursor:"pointer" };
+const btn = { padding:"8px 12px", borderRadius:8, background:"#e2e8f0", border:"none", cursor:"pointer" };
+const btnPrimary = { ...btn, background:"#2563eb", color:"#fff" };
 const table = { width:"100%", borderCollapse:"collapse", fontSize:14, minWidth:900 };
 const th = { textAlign:"left", padding:"10px 8px", borderBottom:"1px solid #e2e8f0", background:"#f8fafc" };
 const td = { padding:"8px 8px", borderBottom:"1px solid #f1f5f9" };
