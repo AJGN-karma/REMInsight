@@ -37,7 +37,7 @@ export default function AdminPage() {
     if (cached && PIN && cached === PIN) {
       setAuthOk(true);
     } else {
-      const attempt = prompt("Enter admin PIN:");
+      const attempt = typeof window !== "undefined" ? prompt("Enter admin PIN:") : null;
       if (PIN && attempt === PIN) {
         sessionStorage.setItem("admin_auth", attempt);
         setAuthOk(true);
@@ -55,7 +55,6 @@ export default function AdminPage() {
       setLoading(true);
       try {
         const data = await listAllPredictions(1000);
-        // listAllPredictions returns createdAtISO; also add createdAtDate for convenience
         const withDate = data.map(d => ({
           ...d,
           createdAtDate: d.createdAtISO ? new Date(d.createdAtISO) : null
@@ -312,4 +311,4 @@ const btnPrimary = { padding:"8px 12px", borderRadius:8, background:"#2563eb", c
 const table = { width:"100%", borderCollapse:"collapse", fontSize:14, minWidth:900 };
 const th = { textAlign:"left", padding:"10px 8px", borderBottom:"1px solid #e2e8f0", background:"#f8fafc" };
 const td = { padding:"8px 8px", borderBottom:"1px solid #f1f5f9" };
-const alertErr = { padding:12, background:"#fef2f2", border:"1px solid "#fecaca", borderRadius:8, color:"#991b1b" };
+const alertErr = { padding:12, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, color:"#991b1b" };
