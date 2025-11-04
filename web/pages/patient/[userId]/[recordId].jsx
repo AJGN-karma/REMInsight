@@ -1,151 +1,184 @@
-// web/pages/patient/[userId]/[recordId].jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import {
-  getPredictionById,
-  getMedicalFileURL,
-} from "../../../src/lib/firebase";
+import { getPredictionById } from "../../../src/lib/firebase";
 
-const PIN = process.env.NEXT_PUBLIC_ADMIN_PIN; // same PIN you use for admin/history
+// optional tiny helpers for labels/colors
+function riskLabel(pred) {
+  return pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
+}
+function riskColor(label) {
+  return label === "High" ? "#ef4444" : label === "Moderate" ? "#f59e0b" : "#10b981";
+}
 
-export default function PatientRecordPage() {
+export default function PatientDetailPage() {
   const router = useRouter();
-  const { userId, recordId } = router.query;
+  const { userId, id } = router.query;
 
-  const [authOk, setAuthOk] = useState(false);
-  const [err, setErr] = useState("");
-  const [record, setRecord] = useState(null);
-  const [pdfLinks, setPdfLinks] = useState([]); // [{name,url}]
+  const [doc, setDoc] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Simple admin PIN gate
-  useEffect(() => {
-    if (!router.isReady) return;
-    const cached = typeof window !== "undefined" ? sessionStorage.getItem("admin_auth") : null;
-    if (cached && PIN && cached === PIN) {
-      setAuthOk(true);
-    } else {
-      const attempt = prompt("Admin PIN required:");
-      if (PIN && attempt === PIN) {
-        sessionStorage.setItem("admin_auth", attempt);
-        setAuthOk(true);
-      } else {
-        setErr("Not authorized.");
-      }
-    }
-  }, [router.isReady]);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
-    if (!authOk || !userId || !recordId) return;
+    if (!userId || !id) return;
     (async () => {
+      setLoading(true);
+      setErr("");
       try {
-        setLoading(true);
-        const rec = await getPredictionById(String(userId), String(recordId));
-        if (!rec) throw new Error("Record not found");
-        setRecord(rec);
-
-        const files = Array.isArray(rec.personalInfo?.medicalFiles)
-          ? rec.personalInfo.medicalFiles
-          : [];
-
-        // Build temporary object URLs for PDFs
-        const links = [];
-        for (const f of files) {
-          try {
-            // eslint-disable-next-line no-await-in-loop
-            const { url, name } = await getMedicalFileURL(String(userId), String(f.id));
-            links.push({ name: f.name || name, url });
-          } catch (e) {
-            console.warn("Failed to reconstruct PDF:", f, e);
-          }
-        }
-        setPdfLinks(links);
+        const d = await getPredictionById(userId, id);
+        setDoc(d);
       } catch (e) {
-        setErr(e.message || String(e));
+        setErr(String(e));
       } finally {
         setLoading(false);
       }
     })();
-  }, [authOk, userId, recordId]);
+  }, [userId, id]);
 
-  function printPage() {
+  const firstRow = useMemo(() => (Array.isArray(doc?.rows) && doc.rows.length ? doc.rows[0] : {}), [doc]);
+  const firstRes = useMemo(() => (doc?.apiResponse?.results?.[0] || {}), [doc]);
+  const probs = firstRes.probs || [];
+  const rLabel = riskLabel(firstRes.pred_risk);
+
+  async function handlePrint() {
     window.print();
   }
 
-  if (!authOk) {
-    return (
-      <div style={{ maxWidth: 900, margin:"40px auto", padding:16 }}>
-        <Head><title>Patient Record</title></Head>
-        {err ? <div style={alertErr}>{err}</div> : <div>Authorizing…</div>}
-      </div>
-    );
+  async function handleDownloadPDF() {
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const auto = await import("jspdf-autotable");
+
+      const docPdf = new jsPDF({ unit: "pt", format: "a4" });
+      const pad = 24;
+
+      docPdf.setFontSize(16);
+      docPdf.text("REMInsight — Patient Report", pad, 40);
+
+      docPdf.setFontSize(12);
+      docPdf.text(`Record ID: ${id}`, pad, 64);
+      docPdf.text(`User ID: ${userId}`, pad, 82);
+      if (doc?.createdAtISO) docPdf.text(`Created: ${new Date(doc.createdAtISO).toLocaleString()}`, pad, 100);
+
+      // Personal info
+      docPdf.setFontSize(14);
+      docPdf.text("Personal Information", pad, 130);
+      docPdf.setFontSize(11);
+      docPdf.text(`Name: ${doc?.personalInfo?.name ?? "-"}`, pad, 150);
+      docPdf.text(`Age: ${doc?.personalInfo?.age ?? "-"}`, pad, 166);
+      docPdf.text(`Gender: ${doc?.personalInfo?.gender ?? "-"}`, pad, 182);
+      docPdf.text(`Sleep Quality: ${doc?.personalInfo?.sleepQuality ?? "-"}`, pad, 198);
+      docPdf.text(`Sleep Duration: ${doc?.personalInfo?.sleepDuration ?? "-"} hrs`, pad, 214);
+      if (Array.isArray(doc?.personalInfo?.sleepIssues) && doc.personalInfo.sleepIssues.length) {
+        docPdf.text(`Sleep Issues: ${doc.personalInfo.sleepIssues.join(", ")}`, pad, 230);
+      }
+      if (doc?.personalInfo?.medicalFiles?.length) {
+        docPdf.text(
+          `Uploaded Medical Reports: ${doc.personalInfo.medicalFiles.map(m => m.name).join(", ")}`,
+          pad, 246
+        );
+      }
+
+      // Objective / First row snapshot
+      docPdf.setFontSize(14);
+      docPdf.text("Objective Snapshot", pad, 276);
+      auto.default(docPdf, {
+        startY: 286,
+        head: [["PSQI", "REM_total_min", "REM_latency_min", "REM_pct"]],
+        body: [[
+          firstRow.psqi_global ?? "-",
+          firstRow.REM_total_min ?? "-",
+          firstRow.REM_latency_min ?? "-",
+          firstRow.REM_pct ?? "-"
+        ]],
+        styles: { fontSize: 10 }
+      });
+
+      // Prediction
+      let y = docPdf.lastAutoTable ? docPdf.lastAutoTable.finalY + 14 : 360;
+      docPdf.setFontSize(14);
+      docPdf.text("Prediction Result", pad, y);
+      y += 10;
+      docPdf.setFontSize(12);
+      docPdf.text(`Risk: ${rLabel}`, pad, y + 16);
+      auto.default(docPdf, {
+        startY: y + 26,
+        head: [["Low", "Moderate", "High"]],
+        body: [[probs[0] ?? "-", probs[1] ?? "-", probs[2] ?? "-"]],
+        styles: { fontSize: 10 }
+      });
+
+      docPdf.save(`REMInsight_${userId}_${id}.pdf`);
+    } catch (e) {
+      alert("Failed to generate PDF. Try using the Print button instead.");
+      console.error(e);
+    }
   }
 
   return (
-    <div style={{ maxWidth: 960, margin:"24px auto", padding:16 }}>
-      <Head>
-        <title>Patient Record</title>
-        <style>{printCSS}</style>
-      </Head>
+    <div style={{ maxWidth: 900, margin: "24px auto", padding: 16 }}>
+      <Head><title>Patient Report</title></Head>
 
-      <div className="no-print" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <Link href="/admin">← Back to Admin</Link>
-        <button onClick={printPage} style={btnPrimary}>🖨 Print</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <h1 style={{ margin: 0 }}>🧾 Patient Report</h1>
+        <div style={{ display:"flex", gap:8 }}>
+          <Link href="/admin">← Back</Link>
+          <button onClick={handlePrint} style={btn}>Print</button>
+          <button onClick={handleDownloadPDF} style={btnPrimary}>Download PDF</button>
+        </div>
       </div>
 
+      {err && <div style={alertErr}>{err}</div>}
       {loading ? (
         <div>Loading…</div>
-      ) : !record ? (
-        <div style={alertErr}>Record not found.</div>
+      ) : !doc ? (
+        <div style={emptyBox}>No data</div>
       ) : (
-        <div style={card}>
-          <h1 style={{ marginTop:0 }}>🧑‍⚕️ Patient Report</h1>
-
-          <section style={section}>
-            <h3 style={h3}>Personal Info</h3>
-            <Row label="Name" value={record.personalInfo?.name || "-"} />
-            <Row label="Age" value={record.personalInfo?.age ?? "-"} />
-            <Row label="Gender" value={record.personalInfo?.gender || "-"} />
-            <Row label="Sleep Quality" value={`${record.personalInfo?.sleepQuality ?? "-"} / 10`} />
-            <Row label="Avg Sleep Duration" value={`${record.personalInfo?.sleepDuration ?? "-"} h`} />
-            <Row label="Sleep Issues" value={(record.personalInfo?.sleepIssues || []).join(", ") || "-"} />
-            <Row label="Medical History" value={record.personalInfo?.medicalHistory || "-"} />
-          </section>
-
-          <section style={section}>
-            <h3 style={h3}>Model Result</h3>
-            {renderResult(record)}
-          </section>
-
-          <section style={section}>
-            <h3 style={h3}>Objective Snapshot</h3>
-            {renderObjective(record)}
-          </section>
-
-          <section style={section}>
-            <h3 style={h3}>Medical Reports (PDF)</h3>
-            {pdfLinks.length === 0 ? (
-              <div style={{ color:"#64748b" }}>No reports uploaded for this session.</div>
-            ) : (
-              <ul>
-                {pdfLinks.map((f, i) => (
-                  <li key={i}>
-                    <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a>
-                  </li>
-                ))}
-              </ul>
+        <div style={panel} id="print-root">
+          <section style={{ marginBottom: 12 }}>
+            <div style={h2}>Personal Information</div>
+            <div style={grid2}>
+              <KV k="Name" v={doc.personalInfo?.name} />
+              <KV k="Age" v={doc.personalInfo?.age} />
+              <KV k="Gender" v={doc.personalInfo?.gender} />
+              <KV k="Sleep Quality" v={doc.personalInfo?.sleepQuality} />
+              <KV k="Sleep Duration (h)" v={doc.personalInfo?.sleepDuration} />
+            </div>
+            {Array.isArray(doc.personalInfo?.sleepIssues) && doc.personalInfo.sleepIssues.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 13 }}>
+                <b>Sleep Issues:</b> {doc.personalInfo.sleepIssues.join(", ")}
+              </div>
             )}
-            <div style={{ fontSize:12, color:"#64748b" }}>
-              (When patient requests a printed report, this page includes report names only. PDFs are for admin view.)
+            {doc.personalInfo?.medicalFiles?.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 13 }}>
+                <b>Uploaded Medical Reports:</b>{" "}
+                {doc.personalInfo.medicalFiles.map((m, i) => (
+                  <span key={i}>{m.name}{i < doc.personalInfo.medicalFiles.length - 1 ? ", " : ""}</span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section style={{ marginBottom: 12 }}>
+            <div style={h2}>Objective Snapshot</div>
+            <div style={grid4}>
+              <KV k="PSQI (global)" v={firstRow.psqi_global} />
+              <KV k="REM total (min)" v={firstRow.REM_total_min} />
+              <KV k="REM latency (min)" v={firstRow.REM_latency_min} />
+              <KV k="REM %" v={firstRow.REM_pct} />
             </div>
           </section>
 
-          <section style={section}>
-            <div style={{ fontSize:12, color:"#64748b" }}>
-              Created: {record.createdAtDate ? record.createdAtDate.toLocaleString() : "-"} |
-              &nbsp;User ID: {record.userId} | Record ID: {record.id}
+          <section>
+            <div style={h2}>Prediction</div>
+            <div style={{ fontWeight: 700, color: riskColor(rLabel), fontSize: 18, marginBottom: 6 }}>
+              Risk: {rLabel}
+            </div>
+            <div style={grid3}>
+              <KV k="P(Low)" v={probs[0]} />
+              <KV k="P(Moderate)" v={probs[1]} />
+              <KV k="P(High)" v={probs[2]} />
             </div>
           </section>
         </div>
@@ -154,77 +187,21 @@ export default function PatientRecordPage() {
   );
 }
 
-/* UI helpers */
-function Row({ label, value }) {
+function KV({ k, v }) {
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"200px 1fr", gap:8, marginBottom:6 }}>
-      <div style={{ color:"#475569" }}>{label}</div>
-      <div style={{ fontWeight:600 }}>{value}</div>
+    <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 10px" }}>
+      <div style={{ fontSize:12, color:"#475569" }}>{k}</div>
+      <div style={{ fontWeight:600 }}>{v ?? "-"}</div>
     </div>
   );
 }
 
-function renderResult(rec) {
-  const res = rec.apiResponse?.results?.[0] || {};
-  const probs = res.probs || [];
-  const risk =
-    res.pred_risk === 2 ? "High" :
-    res.pred_risk === 1 ? "Moderate" :
-    res.pred_risk === 0 ? "Low" : "-";
-  const color =
-    risk === "High" ? "#ef4444" :
-    risk === "Moderate" ? "#f59e0b" : "#10b981";
-
-  return (
-    <div style={{ border:"1px solid #e2e8f0", borderRadius:8, padding:12 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <div style={{ fontSize:18, fontWeight:700 }}>
-          Predicted Risk: <span style={{ color }}>{risk}</span>
-        </div>
-        <div style={{ fontSize:12, color:"#64748b" }}>
-          (Low / Moderate / High): {probs.map(p => (p*100).toFixed(1)+"%").join(" / ")}
-        </div>
-      </div>
-      <div style={{ fontSize:13, marginTop:8 }}>
-        {rec.apiResponse?.what_this_means ||
-          "This is a screening aid—not a diagnosis. Consult a healthcare professional if you feel distressed."}
-      </div>
-    </div>
-  );
-}
-
-function renderObjective(rec) {
-  const row = Array.isArray(rec.rows) && rec.rows.length ? rec.rows[0] : {};
-  const grid = { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px,1fr))", gap:8 };
-  const chip = { background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 10px" };
-  const items = [
-    ["PSQI Global", row.psqi_global],
-    ["REM total (min)", row.REM_total_min],
-    ["REM latency (min)", row.REM_latency_min],
-    ["REM %", row.REM_pct],
-  ];
-  return (
-    <div style={grid}>
-      {items.map(([k,v])=>(
-        <div key={k} style={chip}>
-          <div style={{ fontSize:12, color:"#64748b" }}>{k}</div>
-          <div style={{ fontSize:16, fontWeight:700 }}>{v ?? "-"}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const btnPrimary = { padding:"8px 12px", borderRadius:8, background:"#2563eb", color:"#fff", border:"none", cursor:"pointer" };
-const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16 };
-const section = { marginTop:16 };
-const h3 = { margin:"0 0 8px 0" };
+const panel = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:8, padding:12 };
+const btn = { padding:"8px 12px", borderRadius:8, background:"#e2e8f0", border:"none", cursor:"pointer" };
+const btnPrimary = { ...btn, background:"#2563eb", color:"#fff" };
+const h2 = { fontSize:16, fontWeight:700, marginBottom:8 };
+const grid2 = { display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:8 };
+const grid3 = { display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:8 };
+const grid4 = { display:"grid", gridTemplateColumns:"repeat(4,minmax(0,1fr))", gap:8 };
 const alertErr = { padding:12, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, color:"#991b1b" };
-
-const printCSS = `
-@media print {
-  .no-print { display: none !important; }
-  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  a[href]:after { content: ""; } /* hide URLs after links */
-}
-`;
+const emptyBox = { padding:16, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8 };
