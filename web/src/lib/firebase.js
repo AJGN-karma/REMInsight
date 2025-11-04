@@ -9,7 +9,6 @@ import {
   getDoc,
   doc,
   setDoc,
-  deleteDoc,
   query,
   orderBy,
   limit as qLimit,
@@ -20,29 +19,26 @@ import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
-  deleteObject,
 } from "firebase/storage";
 import {
   getAuth,
-  signInAnonymously,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
 
-/* ------------------------------------------------------------------ */
-/* 🔧 FIREBASE CONFIG + INIT                                           */
-/* ------------------------------------------------------------------ */
-
+/* ----------------------------- ENV + INIT ----------------------------- */
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET, // e.g. rem-insights.appspot.com
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// Helpful warning if something is missing
 (function sanityCheckEnv() {
   const missing = Object.entries({
     NEXT_PUBLIC_FIREBASE_API_KEY: firebaseConfig.apiKey,
@@ -51,13 +47,13 @@ const firebaseConfig = {
     NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: firebaseConfig.storageBucket,
     NEXT_PUBLIC_FIREBASE_APP_ID: firebaseConfig.appId,
   })
-    .filter(([_, v]) => !v)
+    .filter(([, v]) => !v)
     .map(([k]) => k);
   if (missing.length) {
     console.warn(
       "[Firebase] Missing config keys:",
       missing.join(", "),
-      "→ set them in Vercel → Project → Settings → Environment Variables."
+      "→ Set them in Vercel → Project → Settings → Environment Variables."
     );
   }
 })();
@@ -67,23 +63,21 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const auth = getAuth(app);
 
-/* ------------------------------------------------------------------ */
-/* 🔐 AUTH HELPERS                                                     */
-/* ------------------------------------------------------------------ */
+/* ------------------------------- AUTH -------------------------------- */
 
-// Anonymous login (used for prediction without signup)
+/** Ensures we have a signed-in user (anonymous). Returns FirebaseUser. */
 export async function ensureAnonAuth() {
   if (auth.currentUser) return auth.currentUser;
-  const cred = await signInAnonymously(auth);
-  return cred.user;
+  await signInAnonymously(auth);
+  return auth.currentUser;
 }
 
-// Observe current auth state
-export function onAuth(callback) {
-  return onAuthStateChanged(auth, callback);
+/** Listen to auth changes (optional helper) */
+export function onAuth(cb) {
+  return onAuthStateChanged(auth, cb);
 }
 
-// Register or login with email/password (for future registered users)
+/** Email/password login (or register if not found) */
 export async function registerOrLogin(email, password) {
   try {
     const userCred = await signInWithEmailAndPassword(auth, email, password);
@@ -94,35 +88,24 @@ export async function registerOrLogin(email, password) {
   }
 }
 
-// Logout
 export async function logoutUser() {
   await signOut(auth);
 }
 
-/* ------------------------------------------------------------------ */
-/* 👤 USER PROFILE MANAGEMENT                                          */
-/* ------------------------------------------------------------------ */
-
+/* ---------------------------- USER PROFILE --------------------------- */
 export async function upsertUserProfile(userId, profile) {
   const userRef = doc(db, "users", userId);
   await setDoc(
     userRef,
     {
-      profile: {
-        ...(profile || {}),
-        updatedAt: serverTimestamp(),
-      },
+      profile: { ...(profile || {}), updatedAt: serverTimestamp() },
       createdAt: serverTimestamp(),
     },
     { merge: true }
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* 🩺 STORAGE: MEDICAL FILES                                           */
-/* ------------------------------------------------------------------ */
-
-// Upload one medical file (e.g., PDF)
+/* ------------------------ STORAGE (PDF uploads) ----------------------- */
 export async function uploadMedicalFile(file, label, userId) {
   const path = `medical_reports/${userId}/${Date.now()}_${file.name}`;
   const ref = storageRef(storage, path);
@@ -131,7 +114,6 @@ export async function uploadMedicalFile(file, label, userId) {
   return { name: label || file.name, url, path };
 }
 
-// Upload multiple files
 export async function uploadMedicalFiles(items, userId) {
   const out = [];
   for (const it of items || []) {
@@ -142,26 +124,12 @@ export async function uploadMedicalFiles(items, userId) {
   return out;
 }
 
-// Delete a medical file
-export async function deleteMedicalFile(path) {
-  const ref = storageRef(storage, path);
-  await deleteObject(ref);
-  return true;
-}
-
-/* ------------------------------------------------------------------ */
-/* 🧠 PREDICTIONS (CRUD)                                               */
-/* ------------------------------------------------------------------ */
-
-// Save prediction under users/{userId}/predictions/{autoId}
+/* ----------------------- PREDICTIONS: WRITE/READ ---------------------- */
 export async function savePredictionRecord(userId, payload) {
   try {
     const userRef = doc(db, "users", userId);
     const predCol = collection(userRef, "predictions");
-    const docRef = await addDoc(predCol, {
-      ...payload,
-      createdAt: serverTimestamp(),
-    });
+    const docRef = await addDoc(predCol, { ...payload, createdAt: serverTimestamp() });
     return { ok: true, id: docRef.id };
   } catch (e) {
     console.error("[Firestore] save failed:", e);
@@ -169,7 +137,7 @@ export async function savePredictionRecord(userId, payload) {
   }
 }
 
-// Get all predictions across all users (admin)
+/** Admin: list all predictions (across users) */
 export async function listAllPredictions(limitCount = 200) {
   const cg = collectionGroup(db, "predictions");
   const qy = query(cg, orderBy("createdAt", "desc"), qLimit(limitCount));
@@ -186,7 +154,7 @@ export async function listAllPredictions(limitCount = 200) {
   });
 }
 
-// Get predictions for a single user
+/** Patient: list by user */
 export async function listPredictionsByUser(userId, limitCount = 50) {
   const userRef = doc(db, "users", userId);
   const predCol = collection(userRef, "predictions");
@@ -204,37 +172,16 @@ export async function listPredictionsByUser(userId, limitCount = 50) {
   });
 }
 
-// Get single prediction by ID
 export async function getPredictionById(userId, recordId) {
   const ref = doc(db, "users", userId, "predictions", recordId);
   const snap = await getDoc(ref);
   if (!snap.exists()) return null;
   const data = snap.data();
   const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-  return {
-    id: snap.id,
-    ...data,
-    createdAtDate: ts,
-    createdAtISO: ts ? ts.toISOString() : "",
-  };
+  return { id: snap.id, ...data, createdAtDate: ts, createdAtISO: ts ? ts.toISOString() : "" };
 }
 
-// Delete a prediction (admin use)
-export async function deletePrediction(userId, recordId) {
-  try {
-    const ref = doc(db, "users", userId, "predictions", recordId);
-    await deleteDoc(ref);
-    return { ok: true };
-  } catch (e) {
-    console.error("[Firestore] delete failed:", e);
-    return { ok: false, error: String(e) };
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* 📊 CSV EXPORT HELPERS                                               */
-/* ------------------------------------------------------------------ */
-
+/* ---------------------------- CSV EXPORT ----------------------------- */
 export function exportArrayToCSV(filename, rows, headerOrder) {
   if (!rows?.length) return;
   const headers = headerOrder || Object.keys(rows[0]);
@@ -246,7 +193,6 @@ export function exportArrayToCSV(filename, rows, headerOrder) {
   const csv = [headers.join(",")]
     .concat(rows.map((r) => headers.map((h) => esc(r[h])).join(",")))
     .join("\n");
-
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -259,8 +205,7 @@ export function exportArrayToCSV(filename, rows, headerOrder) {
 }
 
 export function normalizeDocForCSV(doc) {
-  const firstRow =
-    Array.isArray(doc.rows) && doc.rows.length ? doc.rows[0] : {};
+  const firstRow = Array.isArray(doc.rows) && doc.rows.length ? doc.rows[0] : {};
   const firstRes = doc.apiResponse?.results?.[0] || {};
   const probs = firstRes.probs || [];
   return {
