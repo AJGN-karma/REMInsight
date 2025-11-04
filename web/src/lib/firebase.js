@@ -9,6 +9,7 @@ import {
   getDoc,
   doc,
   setDoc,
+  deleteDoc,
   query,
   orderBy,
   limit as qLimit,
@@ -19,16 +20,19 @@ import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
+  deleteObject,
 } from "firebase/storage";
 import {
   getAuth,
+  signInAnonymously,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
 
 /* ------------------------------------------------------------------ */
-/* ENV + INIT                                                          */
+/* 🔧 FIREBASE CONFIG + INIT                                           */
 /* ------------------------------------------------------------------ */
 
 const firebaseConfig = {
@@ -39,7 +43,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Helpful warning in build logs if something is missing
 (function sanityCheckEnv() {
   const missing = Object.entries({
     NEXT_PUBLIC_FIREBASE_API_KEY: firebaseConfig.apiKey,
@@ -51,7 +54,6 @@ const firebaseConfig = {
     .filter(([_, v]) => !v)
     .map(([k]) => k);
   if (missing.length) {
-    // This only logs on the client; safe to show
     console.warn(
       "[Firebase] Missing config keys:",
       missing.join(", "),
@@ -66,13 +68,22 @@ export const storage = getStorage(app);
 export const auth = getAuth(app);
 
 /* ------------------------------------------------------------------ */
-/* AUTH                                                                */
+/* 🔐 AUTH HELPERS                                                     */
 /* ------------------------------------------------------------------ */
 
-/**
- * Try sign-in; if user doesn't exist, create account. Returns FirebaseUser.
- * Use this when PersonalInfo form provides email + password.
- */
+// Anonymous login (used for prediction without signup)
+export async function ensureAnonAuth() {
+  if (auth.currentUser) return auth.currentUser;
+  const cred = await signInAnonymously(auth);
+  return cred.user;
+}
+
+// Observe current auth state
+export function onAuth(callback) {
+  return onAuthStateChanged(auth, callback);
+}
+
+// Register or login with email/password (for future registered users)
 export async function registerOrLogin(email, password) {
   try {
     const userCred = await signInWithEmailAndPassword(auth, email, password);
@@ -83,18 +94,15 @@ export async function registerOrLogin(email, password) {
   }
 }
 
+// Logout
 export async function logoutUser() {
   await signOut(auth);
 }
 
 /* ------------------------------------------------------------------ */
-/* USER PROFILE (optional but useful)                                  */
+/* 👤 USER PROFILE MANAGEMENT                                          */
 /* ------------------------------------------------------------------ */
 
-/**
- * Upsert a minimal public profile for a user.
- * Call after auth or when you have new personalInfo to persist.
- */
 export async function upsertUserProfile(userId, profile) {
   const userRef = doc(db, "users", userId);
   await setDoc(
@@ -104,7 +112,6 @@ export async function upsertUserProfile(userId, profile) {
         ...(profile || {}),
         updatedAt: serverTimestamp(),
       },
-      // Ensure a createdAt exists
       createdAt: serverTimestamp(),
     },
     { merge: true }
@@ -112,30 +119,22 @@ export async function upsertUserProfile(userId, profile) {
 }
 
 /* ------------------------------------------------------------------ */
-/* STORAGE (Medical PDFs)                                              */
+/* 🩺 STORAGE: MEDICAL FILES                                           */
 /* ------------------------------------------------------------------ */
 
-/**
- * Upload ONE medical file (PDF or any file) and return {name, url}.
- * `label` is the friendly name the user typed (e.g., "Polysomnography 2024").
- */
+// Upload one medical file (e.g., PDF)
 export async function uploadMedicalFile(file, label, userId) {
   const path = `medical_reports/${userId}/${Date.now()}_${file.name}`;
   const ref = storageRef(storage, path);
   await uploadBytes(ref, file);
   const url = await getDownloadURL(ref);
-  return { name: label || file.name, url };
+  return { name: label || file.name, url, path };
 }
 
-/**
- * Upload MANY medical files at once.
- * @param {Array<{file: File, label: string}>} items
- * @returns Promise<Array<{name, url}>>
- */
+// Upload multiple files
 export async function uploadMedicalFiles(items, userId) {
   const out = [];
   for (const it of items || []) {
-    // Skip empty rows
     if (!it?.file) continue;
     // eslint-disable-next-line no-await-in-loop
     out.push(await uploadMedicalFile(it.file, it.label, userId));
@@ -143,21 +142,18 @@ export async function uploadMedicalFiles(items, userId) {
   return out;
 }
 
+// Delete a medical file
+export async function deleteMedicalFile(path) {
+  const ref = storageRef(storage, path);
+  await deleteObject(ref);
+  return true;
+}
+
 /* ------------------------------------------------------------------ */
-/* PREDICTIONS WRITE                                                   */
+/* 🧠 PREDICTIONS (CRUD)                                               */
 /* ------------------------------------------------------------------ */
 
-/**
- * Save one analysis under users/{userId}/predictions/{autoId}
- * payload shape:
- * {
- *   personalInfo,          // object from PersonalInfo form
- *   rows,                  // uploaded objective row(s)
- *   apiResponse,           // response from /predict
- *   clientMeta,            // { ua, url, ts }
- *   medicalFiles?: [{name, url}], // from uploadMedicalFiles (optional)
- * }
- */
+// Save prediction under users/{userId}/predictions/{autoId}
 export async function savePredictionRecord(userId, payload) {
   try {
     const userRef = doc(db, "users", userId);
@@ -173,14 +169,7 @@ export async function savePredictionRecord(userId, payload) {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* READS: ADMIN + PATIENT                                              */
-/* ------------------------------------------------------------------ */
-
-/**
- * ADMIN: list all predictions across all users (newest first).
- * NOTE: Requires Firestore rule that allows the admin account or PIN-gated page.
- */
+// Get all predictions across all users (admin)
 export async function listAllPredictions(limitCount = 200) {
   const cg = collectionGroup(db, "predictions");
   const qy = query(cg, orderBy("createdAt", "desc"), qLimit(limitCount));
@@ -197,9 +186,7 @@ export async function listAllPredictions(limitCount = 200) {
   });
 }
 
-/**
- * PATIENT: list a patient's own predictions by userId.
- */
+// Get predictions for a single user
 export async function listPredictionsByUser(userId, limitCount = 50) {
   const userRef = doc(db, "users", userId);
   const predCol = collection(userRef, "predictions");
@@ -217,9 +204,7 @@ export async function listPredictionsByUser(userId, limitCount = 50) {
   });
 }
 
-/**
- * Get a single prediction by user + record id.
- */
+// Get single prediction by ID
 export async function getPredictionById(userId, recordId) {
   const ref = doc(db, "users", userId, "predictions", recordId);
   const snap = await getDoc(ref);
@@ -234,8 +219,20 @@ export async function getPredictionById(userId, recordId) {
   };
 }
 
+// Delete a prediction (admin use)
+export async function deletePrediction(userId, recordId) {
+  try {
+    const ref = doc(db, "users", userId, "predictions", recordId);
+    await deleteDoc(ref);
+    return { ok: true };
+  } catch (e) {
+    console.error("[Firestore] delete failed:", e);
+    return { ok: false, error: String(e) };
+  }
+}
+
 /* ------------------------------------------------------------------ */
-/* CSV EXPORT (Excel-friendly)                                         */
+/* 📊 CSV EXPORT HELPERS                                               */
 /* ------------------------------------------------------------------ */
 
 export function exportArrayToCSV(filename, rows, headerOrder) {
@@ -261,10 +258,6 @@ export function exportArrayToCSV(filename, rows, headerOrder) {
   URL.revokeObjectURL(url);
 }
 
-/**
- * Build a compact row for export from a prediction doc.
- * Works with our API schema (first row + first result).
- */
 export function normalizeDocForCSV(doc) {
   const firstRow =
     Array.isArray(doc.rows) && doc.rows.length ? doc.rows[0] : {};
@@ -287,4 +280,3 @@ export function normalizeDocForCSV(doc) {
     prob_high: probs[2] ?? "",
   };
 }
-
