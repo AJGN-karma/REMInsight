@@ -124,7 +124,8 @@ export default function AdminPage() {
           (r.personalInfo?.name || "").toLowerCase().includes(t) ||
           (r.personalInfo?.gender || "").toLowerCase().includes(t) ||
           String(r.personalInfo?.age ?? "").includes(t) ||
-          (r.id || "").toLowerCase().includes(t)
+          (r.id || "").toLowerCase().includes(t) ||
+          (r.userId || "").toLowerCase().includes(t)
       );
     }
     return out;
@@ -158,8 +159,7 @@ export default function AdminPage() {
     const cvs = canvasRef.current;
     if (!cvs) return;
     const ctx = cvs.getContext("2d");
-    const W = cvs.width,
-      H = cvs.height;
+    const W = cvs.width, H = cvs.height;
     ctx.clearRect(0, 0, W, H);
 
     if (!trendData.length) {
@@ -228,7 +228,6 @@ export default function AdminPage() {
       }
       const cred = await signInWithEmailAndPassword(auth, adminEmail, adminPass);
       if (cred.user.uid !== ADMIN_UID) {
-        // immediately sign out if not the configured admin
         await signOut(auth);
         throw new Error("This account is not the configured admin (UID mismatch).");
       }
@@ -247,9 +246,7 @@ export default function AdminPage() {
   if (!pinOk) {
     return (
       <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-        <Head>
-          <title>Admin</title>
-        </Head>
+        <Head><title>Admin</title></Head>
         {err ? <div style={alertErr}>{err}</div> : <div>Authorizing…</div>}
       </div>
     );
@@ -259,9 +256,7 @@ export default function AdminPage() {
   if (loadingAuth || !authUser) {
     return (
       <div style={{ maxWidth: 560, margin: "40px auto", padding: 16 }}>
-        <Head>
-          <title>Admin Login</title>
-        </Head>
+        <Head><title>Admin Login</title></Head>
         <h1>🔐 Admin Login</h1>
         <form onSubmit={doAdminSignIn} style={{ display: "grid", gap: 12, maxWidth: 360 }}>
           <input
@@ -291,9 +286,7 @@ export default function AdminPage() {
   if (authUser && authUser.uid !== ADMIN_UID) {
     return (
       <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
-        <Head>
-          <title>Admin</title>
-        </Head>
+        <Head><title>Admin</title></Head>
         <div style={alertErr}>This account is not the configured admin.</div>
         <button onClick={doSignOut} style={btn}>Sign out</button>
       </div>
@@ -303,9 +296,7 @@ export default function AdminPage() {
   // Admin view
   return (
     <div style={{ maxWidth: 1200, margin: "24px auto", padding: 16 }}>
-      <Head>
-        <title>Admin Console</title>
-      </Head>
+      <Head><title>Admin Console</title></Head>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>🔧 Admin Console</h1>
@@ -319,7 +310,7 @@ export default function AdminPage() {
       <div style={panel}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
           <div>
-            <div style={label}>Search (name/id)</div>
+            <div style={label}>Search (name/id/userId)</div>
             <input value={qText} onChange={(e) => setQText(e.target.value)} placeholder="e.g., JJ or doc id" style={inp} />
           </div>
           <div>
@@ -374,6 +365,7 @@ export default function AdminPage() {
                   <th style={th}>PSQI</th>
                   <th style={th}>Risk</th>
                   <th style={th}>Doc ID</th>
+                  <th style={th}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -390,6 +382,10 @@ export default function AdminPage() {
                       <td style={td}>{firstRow.psqi_global ?? "-"}</td>
                       <td style={{ ...td, fontWeight: 600, color: riskColor(label) }}>{label}</td>
                       <td style={td}>{r.id}</td>
+                      <td style={td}>
+                        {/* ✅ open patient printable/PDF page */}
+                        <Link href={`/patient/${r.userId}/${r.id}`} style={{ color: "#2563eb" }}>View</Link>
+                      </td>
                     </tr>
                   );
                 })}
