@@ -6,8 +6,9 @@ import { apiHealth, getFeatures, predict } from "../src/lib/api";
 import {
   ensureAnonAuth,
   registerOrLogin,
-  savePredictionRecord,
   upsertUserProfile,
+  generateAnalysisId,
+  savePredictionRecordUpsert,
 } from "../src/lib/firebase";
 
 import PersonalInfoForm from "../src/components/PersonalInfoForm";
@@ -19,6 +20,8 @@ export default function Home() {
   const [step, setStep] = useState("personal"); // personal -> data -> results
   const [personalInfo, setPersonalInfo] = useState(null);
   const [userId, setUserId] = useState(null);
+  const [analysisId, setAnalysisId] = useState(null);     // ✅ stable id for this analysis session
+  const [savedOnce, setSavedOnce] = useState(false);       // ✅ prevent duplicates
   const [uploadedRows, setUploadedRows] = useState(null);
   const [apiFeatures, setApiFeatures] = useState([]);
   const [analysisResults, setAnalysisResults] = useState(null);
@@ -45,7 +48,6 @@ export default function Home() {
       setBusy(true);
       setPersonalInfo(data);
 
-      // Preferred: Email/Password → real uid
       if (data.email && data.password) {
         const user = await registerOrLogin(data.email, data.password);
         setUserId(user.uid);
@@ -55,7 +57,6 @@ export default function Home() {
           gender: data.gender || "",
         });
       } else {
-        // Otherwise anonymous
         const user = await ensureAnonAuth();
         setUserId(user.uid);
         await upsertUserProfile(user.uid, {
@@ -64,6 +65,10 @@ export default function Home() {
           gender: data.gender || "",
         });
       }
+
+      // reset analysis context
+      setAnalysisId(null);
+      setSavedOnce(false);
 
       setStep("data");
     } catch (e) {
@@ -82,7 +87,6 @@ export default function Home() {
         throw new Error("No rows were uploaded.");
       }
       if (!userId) {
-        // Guard (shouldn’t happen if personal step completed)
         const user = await ensureAnonAuth();
         setUserId(user.uid);
       }
@@ -90,29 +94,59 @@ export default function Home() {
       setUploadedRows(rows);
 
       // Predict
-      console.log("[index] sending rows", rows.length, rows[0]);
       const modelResp = await predict(rows);
       setAnalysisResults(modelResp);
       setStep("results");
 
-      // Save to Firestore under users/{userId}/predictions/*
+      // Prepare analysisId (stable within this session run)
+      const aid = analysisId || generateAnalysisId();
+      setAnalysisId(aid);
+
+      // Save (idempotent upsert)
       const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
-      savePredictionRecord(userId, {
+      const res = await savePredictionRecordUpsert(userId, aid, {
         personalInfo: personalInfo || null,
         rows,
         apiResponse: modelResp,
         clientMeta,
-      }).then((r) => {
-        if (!r.ok) console.warn("Firestore save warning:", r.error);
-        else console.log("Saved doc id:", r.id);
       });
-
+      if (!res.ok) {
+        console.warn("Firestore save warning:", res.error);
+      } else {
+        setSavedOnce(true);
+      }
     } catch (e) {
       setErr(e.message || "Prediction failed");
     } finally {
       setBusy(false);
     }
   };
+
+  function manualSave() {
+    if (!userId) return alert("User not initialized");
+    if (!analysisResults || !uploadedRows) return alert("Nothing to save");
+    if (!analysisId) {
+      const aid = generateAnalysisId();
+      setAnalysisId(aid);
+    }
+    if (savedOnce) {
+      alert("Already saved for this analysis session.");
+      return;
+    }
+    const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
+    savePredictionRecordUpsert(userId, analysisId, {
+      personalInfo: personalInfo || null,
+      rows: uploadedRows || [],
+      apiResponse: analysisResults || null,
+      clientMeta,
+    }).then((r) => {
+      if (!r.ok) alert("Save failed: " + r.error);
+      else {
+        alert("Saved.");
+        setSavedOnce(true);
+      }
+    });
+  }
 
   const bar = { background:"#fff", borderBottom:"1px solid #e5e7eb", position:"sticky", top:0, zIndex:10 };
 
@@ -189,19 +223,7 @@ export default function Home() {
               results={analysisResults}
               personalInfo={personalInfo}
               uploadedRows={uploadedRows}
-              onSave={() => {
-                if (!userId) return alert("User not initialized");
-                const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
-                savePredictionRecord(userId, {
-                  personalInfo: personalInfo || null,
-                  rows: uploadedRows || [],
-                  apiResponse: analysisResults || null,
-                  clientMeta
-                }).then((r)=> {
-                  if (!r.ok) alert("Save failed: " + r.error);
-                  else alert("Saved with id: " + r.id);
-                });
-              }}
+              onSave={manualSave}
             />
             <div style={{ marginTop: 12, display:"flex", justifyContent:"space-between" }}>
               <button
@@ -210,12 +232,26 @@ export default function Home() {
               >
                 ← Back
               </button>
-              <button
-                onClick={() => { setAnalysisResults(null); setStep("personal"); }}
-                style={{ padding:"8px 12px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", cursor:"pointer", fontWeight:600 }}
-              >
-                New Analysis
-              </button>
+              <div style={{ display:"flex", gap:8 }}>
+                <button
+                  onClick={manualSave}
+                  disabled={savedOnce}
+                  title={savedOnce ? "Already saved" : "Save"}
+                  style={{
+                    padding:"8px 12px", borderRadius:8, border:"none",
+                    background: savedOnce ? "#94a3b8" : "#2563eb",
+                    color:"#fff", cursor:"pointer", fontWeight:600
+                  }}
+                >
+                  {savedOnce ? "Saved" : "Save"}
+                </button>
+                <button
+                  onClick={() => { setAnalysisResults(null); setSavedOnce(false); setAnalysisId(null); setStep("personal"); }}
+                  style={{ padding:"8px 12px", borderRadius:8, border:"none", background:"#0ea5e9", color:"#fff", cursor:"pointer", fontWeight:600 }}
+                >
+                  New Analysis
+                </button>
+              </div>
             </div>
           </>
         )}
