@@ -1,207 +1,294 @@
-import React, { useEffect, useMemo, useState } from "react";
+// web/pages/patient/[userId]/[id].jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { getPredictionById } from "../../../src/lib/firebase";
+import { auth, getPredictionById } from "../../../src/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
-// optional tiny helpers for labels/colors
-function riskLabel(pred) {
-  return pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
+function riskLabel(v) {
+  return v === 2 ? "High" : v === 1 ? "Moderate" : v === 0 ? "Low" : "-";
 }
 function riskColor(label) {
   return label === "High" ? "#ef4444" : label === "Moderate" ? "#f59e0b" : "#10b981";
 }
 
-export default function PatientDetailPage() {
+export default function PatientReportPage() {
   const router = useRouter();
   const { userId, id } = router.query;
 
+  const [authUser, setAuthUser] = useState(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
   const [doc, setDoc] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  const chartRef = useRef(null);
+
+  // auth
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setAuthUser(u || null);
+      setLoadingAuth(false);
+    });
+    return () => unsub();
+  }, []);
+
+  // load doc
   useEffect(() => {
     if (!userId || !id) return;
+    if (loadingAuth) return;
     (async () => {
       setLoading(true);
       setErr("");
       try {
-        const d = await getPredictionById(userId, id);
-        setDoc(d);
+        const d = await getPredictionById(String(userId), String(id));
+        if (!d) {
+          setErr("Record not found.");
+        } else {
+          setDoc(d);
+        }
       } catch (e) {
         setErr(String(e));
       } finally {
         setLoading(false);
       }
     })();
-  }, [userId, id]);
+  }, [userId, id, loadingAuth]);
 
-  const firstRow = useMemo(() => (Array.isArray(doc?.rows) && doc.rows.length ? doc.rows[0] : {}), [doc]);
-  const firstRes = useMemo(() => (doc?.apiResponse?.results?.[0] || {}), [doc]);
-  const probs = firstRes.probs || [];
-  const rLabel = riskLabel(firstRes.pred_risk);
+  // probs for chart
+  const probs = useMemo(() => {
+    const pr = doc?.apiResponse?.results?.[0]?.probs || [];
+    return pr.length ? pr : [0, 0, 0];
+  }, [doc]);
 
-  async function handlePrint() {
+  // draw simple bar chart
+  useEffect(() => {
+    const cvs = chartRef.current;
+    if (!cvs) return;
+    const ctx = cvs.getContext("2d");
+    const W = cvs.width, H = cvs.height;
+    ctx.clearRect(0,0,W,H);
+    const labels = ["Low","Moderate","High"];
+    const max = Math.max(...probs, 1);
+
+    // axes
+    ctx.strokeStyle = "#94a3b8";
+    ctx.beginPath();
+    ctx.moveTo(40, 20);
+    ctx.lineTo(40, H-30);
+    ctx.lineTo(W-10, H-30);
+    ctx.stroke();
+
+    // bars
+    const bw = 60, gap = 30;
+    const startX = 60;
+    for (let i=0;i<3;i++){
+      const val = probs[i] || 0;
+      const h = ((H-60) * val) / max;
+      const x = startX + i*(bw+gap);
+      const y = (H-30) - h;
+      ctx.fillStyle = i===0 ? "#10b981" : i===1 ? "#f59e0b" : "#ef4444";
+      ctx.fillRect(x, y, bw, h);
+      ctx.fillStyle = "#334155";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(labels[i], x+8, H-10);
+      ctx.fillText(String(val.toFixed(3)), x+6, y-6);
+    }
+  }, [probs]);
+
+  function doPrint() {
     window.print();
   }
 
-  async function handleDownloadPDF() {
+  async function downloadPDF() {
+    if (!doc) return;
+    const firstRow = Array.isArray(doc.rows) && doc.rows.length ? doc.rows[0] : {};
+    const firstRes = doc.apiResponse?.results?.[0] || {};
+    const predLbl = riskLabel(firstRes.pred_risk);
+
+    const pdf = new jsPDF({ unit: "pt", format: "a4" });
+    pdf.setFontSize(16);
+    pdf.text("REMInsight — Patient Report", 40, 40);
+
+    pdf.setFontSize(11);
+    pdf.text(`Report ID: ${doc.id}`, 40, 64);
+    pdf.text(`User ID: ${doc.userId}`, 40, 80);
+    pdf.text(`Created: ${doc.createdAtISO || "-"}`, 40, 96);
+
+    // Patient info
+    pdf.setFontSize(13);
+    pdf.text("Patient Information", 40, 124);
+    pdf.autoTable({
+      startY: 132,
+      styles: { fontSize: 11 },
+      head: [['Name','Age','Gender']],
+      body: [[
+        doc.personalInfo?.name || "-",
+        String(doc.personalInfo?.age ?? "-"),
+        doc.personalInfo?.gender || "-"
+      ]]
+    });
+
+    // Results
+    pdf.setFontSize(13);
+    pdf.text("Model Result", 40, pdf.lastAutoTable.finalY + 24);
+    pdf.autoTable({
+      startY: pdf.lastAutoTable.finalY + 30,
+      styles: { fontSize: 11 },
+      head: [['Risk','Prob (Low)','Prob (Moderate)','Prob (High)']],
+      body: [[
+        predLbl,
+        String((probs[0]||0).toFixed(4)),
+        String((probs[1]||0).toFixed(4)),
+        String((probs[2]||0).toFixed(4)),
+      ]]
+    });
+
+    // Objective subset
+    pdf.setFontSize(13);
+    pdf.text("Key Objective Inputs", 40, pdf.lastAutoTable.finalY + 24);
+    pdf.autoTable({
+      startY: pdf.lastAutoTable.finalY + 30,
+      styles: { fontSize: 11 },
+      head: [['PSQI Global','REM Total (min)','REM Latency (min)','REM %']],
+      body: [[
+        String(firstRow.psqi_global ?? "-"),
+        String(firstRow.REM_total_min ?? "-"),
+        String(firstRow.REM_latency_min ?? "-"),
+        String(firstRow.REM_pct ?? "-"),
+      ]]
+    });
+
+    // Add chart image
     try {
-      const { default: jsPDF } = await import("jspdf");
-      const auto = await import("jspdf-autotable");
-
-      const docPdf = new jsPDF({ unit: "pt", format: "a4" });
-      const pad = 24;
-
-      docPdf.setFontSize(16);
-      docPdf.text("REMInsight — Patient Report", pad, 40);
-
-      docPdf.setFontSize(12);
-      docPdf.text(`Record ID: ${id}`, pad, 64);
-      docPdf.text(`User ID: ${userId}`, pad, 82);
-      if (doc?.createdAtISO) docPdf.text(`Created: ${new Date(doc.createdAtISO).toLocaleString()}`, pad, 100);
-
-      // Personal info
-      docPdf.setFontSize(14);
-      docPdf.text("Personal Information", pad, 130);
-      docPdf.setFontSize(11);
-      docPdf.text(`Name: ${doc?.personalInfo?.name ?? "-"}`, pad, 150);
-      docPdf.text(`Age: ${doc?.personalInfo?.age ?? "-"}`, pad, 166);
-      docPdf.text(`Gender: ${doc?.personalInfo?.gender ?? "-"}`, pad, 182);
-      docPdf.text(`Sleep Quality: ${doc?.personalInfo?.sleepQuality ?? "-"}`, pad, 198);
-      docPdf.text(`Sleep Duration: ${doc?.personalInfo?.sleepDuration ?? "-"} hrs`, pad, 214);
-      if (Array.isArray(doc?.personalInfo?.sleepIssues) && doc.personalInfo.sleepIssues.length) {
-        docPdf.text(`Sleep Issues: ${doc.personalInfo.sleepIssues.join(", ")}`, pad, 230);
+      const cvs = chartRef.current;
+      if (cvs) {
+        const img = cvs.toDataURL("image/png");
+        pdf.setFontSize(13);
+        pdf.text("Risk Probabilities", 40, pdf.lastAutoTable.finalY + 24);
+        pdf.addImage(img, "PNG", 40, pdf.lastAutoTable.finalY + 30, 400, 180);
       }
-      if (doc?.personalInfo?.medicalFiles?.length) {
-        docPdf.text(
-          `Uploaded Medical Reports: ${doc.personalInfo.medicalFiles.map(m => m.name).join(", ")}`,
-          pad, 246
-        );
-      }
+    } catch {}
 
-      // Objective / First row snapshot
-      docPdf.setFontSize(14);
-      docPdf.text("Objective Snapshot", pad, 276);
-      auto.default(docPdf, {
-        startY: 286,
-        head: [["PSQI", "REM_total_min", "REM_latency_min", "REM_pct"]],
-        body: [[
-          firstRow.psqi_global ?? "-",
-          firstRow.REM_total_min ?? "-",
-          firstRow.REM_latency_min ?? "-",
-          firstRow.REM_pct ?? "-"
-        ]],
-        styles: { fontSize: 10 }
-      });
-
-      // Prediction
-      let y = docPdf.lastAutoTable ? docPdf.lastAutoTable.finalY + 14 : 360;
-      docPdf.setFontSize(14);
-      docPdf.text("Prediction Result", pad, y);
-      y += 10;
-      docPdf.setFontSize(12);
-      docPdf.text(`Risk: ${rLabel}`, pad, y + 16);
-      auto.default(docPdf, {
-        startY: y + 26,
-        head: [["Low", "Moderate", "High"]],
-        body: [[probs[0] ?? "-", probs[1] ?? "-", probs[2] ?? "-"]],
-        styles: { fontSize: 10 }
-      });
-
-      docPdf.save(`REMInsight_${userId}_${id}.pdf`);
-    } catch (e) {
-      alert("Failed to generate PDF. Try using the Print button instead.");
-      console.error(e);
-    }
+    pdf.save(`patient_${doc.userId}_${doc.id}.pdf`);
   }
 
+  if (loading || loadingAuth) {
+    return <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>Loading…</div>;
+  }
+  if (err) {
+    return <div style={{ maxWidth: 900, margin: "40px auto", padding: 16, color: "#991b1b" }}>{err}</div>;
+  }
+  if (!doc) {
+    return <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>Not found.</div>;
+  }
+
+  const firstRow = Array.isArray(doc.rows) && doc.rows.length ? doc.rows[0] : {};
+  const firstRes = doc.apiResponse?.results?.[0] || {};
+  const predLbl = riskLabel(firstRes.pred_risk);
+
   return (
-    <div style={{ maxWidth: 900, margin: "24px auto", padding: 16 }}>
-      <Head><title>Patient Report</title></Head>
+    <div style={{ maxWidth: 1000, margin: "24px auto", padding: 16 }}>
+      <Head>
+        <title>Patient Report</title>
+      </Head>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>🧾 Patient Report</h1>
-        <div style={{ display:"flex", gap:8 }}>
-          <Link href="/admin">← Back</Link>
-          <button onClick={handlePrint} style={btn}>Print</button>
-          <button onClick={handleDownloadPDF} style={btnPrimary}>Download PDF</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href={authUser?.uid ? "/history" : "/"} style={{ lineHeight: "32px" }}>← Back</Link>
+          <button onClick={doPrint} style={btn}>🖨 Print</button>
+          <button onClick={downloadPDF} style={btnPrimary}>⬇ Download PDF</button>
         </div>
       </div>
 
-      {err && <div style={alertErr}>{err}</div>}
-      {loading ? (
-        <div>Loading…</div>
-      ) : !doc ? (
-        <div style={emptyBox}>No data</div>
-      ) : (
-        <div style={panel} id="print-root">
-          <section style={{ marginBottom: 12 }}>
-            <div style={h2}>Personal Information</div>
-            <div style={grid2}>
-              <KV k="Name" v={doc.personalInfo?.name} />
-              <KV k="Age" v={doc.personalInfo?.age} />
-              <KV k="Gender" v={doc.personalInfo?.gender} />
-              <KV k="Sleep Quality" v={doc.personalInfo?.sleepQuality} />
-              <KV k="Sleep Duration (h)" v={doc.personalInfo?.sleepDuration} />
-            </div>
-            {Array.isArray(doc.personalInfo?.sleepIssues) && doc.personalInfo.sleepIssues.length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 13 }}>
-                <b>Sleep Issues:</b> {doc.personalInfo.sleepIssues.join(", ")}
-              </div>
-            )}
-            {doc.personalInfo?.medicalFiles?.length > 0 && (
-              <div style={{ marginTop: 6, fontSize: 13 }}>
-                <b>Uploaded Medical Reports:</b>{" "}
-                {doc.personalInfo.medicalFiles.map((m, i) => (
-                  <span key={i}>{m.name}{i < doc.personalInfo.medicalFiles.length - 1 ? ", " : ""}</span>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section style={{ marginBottom: 12 }}>
-            <div style={h2}>Objective Snapshot</div>
-            <div style={grid4}>
-              <KV k="PSQI (global)" v={firstRow.psqi_global} />
-              <KV k="REM total (min)" v={firstRow.REM_total_min} />
-              <KV k="REM latency (min)" v={firstRow.REM_latency_min} />
-              <KV k="REM %" v={firstRow.REM_pct} />
-            </div>
-          </section>
-
-          <section>
-            <div style={h2}>Prediction</div>
-            <div style={{ fontWeight: 700, color: riskColor(rLabel), fontSize: 18, marginBottom: 6 }}>
-              Risk: {rLabel}
-            </div>
-            <div style={grid3}>
-              <KV k="P(Low)" v={probs[0]} />
-              <KV k="P(Moderate)" v={probs[1]} />
-              <KV k="P(High)" v={probs[2]} />
-            </div>
-          </section>
+      {/* Header */}
+      <div style={card}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 }}>
+          <Info title="Report ID" value={doc.id} />
+          <Info title="User ID" value={doc.userId} />
+          <Info title="Created" value={doc.createdAtISO || "-"} />
+          <Info title="Patient" value={doc.personalInfo?.name || "-"} />
+          <Info title="Age" value={String(doc.personalInfo?.age ?? "-")} />
+          <Info title="Gender" value={doc.personalInfo?.gender || "-"} />
         </div>
-      )}
+      </div>
+
+      {/* Results + chart */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+        <div style={card}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Model Output</div>
+          <div><b>Predicted Risk:</b> <span style={{ color: riskColor(predLbl), fontWeight: 700 }}>{predLbl}</span></div>
+          <div style={{ marginTop: 8 }}>Probabilities</div>
+          <ul style={{ marginTop: 4 }}>
+            <li>Low: {(probs[0]||0).toFixed(4)}</li>
+            <li>Moderate: {(probs[1]||0).toFixed(4)}</li>
+            <li>High: {(probs[2]||0).toFixed(4)}</li>
+          </ul>
+        </div>
+        <div style={card}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Risk Probabilities (Chart)</div>
+          <canvas ref={chartRef} width={520} height={220} />
+        </div>
+      </div>
+
+      {/* Key objective inputs */}
+      <div style={{ ...card, marginTop: 12 }}>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Key Objective Inputs</div>
+        <table style={table}>
+          <thead>
+            <tr>
+              <th style={th}>PSQI Global</th>
+              <th style={th}>REM Total (min)</th>
+              <th style={th}>REM Latency (min)</th>
+              <th style={th}>REM %</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={td}>{firstRow.psqi_global ?? "-"}</td>
+              <td style={td}>{firstRow.REM_total_min ?? "-"}</td>
+              <td style={td}>{firstRow.REM_latency_min ?? "-"}</td>
+              <td style={td}>{firstRow.REM_pct ?? "-"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Optional notes */}
+      {doc.personalInfo?.medicalHistory ? (
+        <div style={{ ...card, marginTop: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Medical History (Patient Provided)</div>
+          <div style={{ whiteSpace: "pre-wrap" }}>{doc.personalInfo.medicalHistory}</div>
+        </div>
+      ) : null}
+
+      <style jsx global>{`
+        @media print {
+          a, button { display: none !important; }
+          canvas { break-inside: avoid; }
+          body { background: #fff; }
+        }
+      `}</style>
     </div>
   );
 }
 
-function KV({ k, v }) {
+function Info({ title, value }) {
   return (
-    <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 10px" }}>
-      <div style={{ fontSize:12, color:"#475569" }}>{k}</div>
-      <div style={{ fontWeight:600 }}>{v ?? "-"}</div>
+    <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:10 }}>
+      <div style={{ fontSize:12, color:"#475569" }}>{title}</div>
+      <div style={{ fontWeight:700 }}>{value}</div>
     </div>
   );
 }
 
-const panel = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:8, padding:12 };
+const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:12 };
 const btn = { padding:"8px 12px", borderRadius:8, background:"#e2e8f0", border:"none", cursor:"pointer" };
 const btnPrimary = { ...btn, background:"#2563eb", color:"#fff" };
-const h2 = { fontSize:16, fontWeight:700, marginBottom:8 };
-const grid2 = { display:"grid", gridTemplateColumns:"repeat(2,minmax(0,1fr))", gap:8 };
-const grid3 = { display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:8 };
-const grid4 = { display:"grid", gridTemplateColumns:"repeat(4,minmax(0,1fr))", gap:8 };
-const alertErr = { padding:12, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, color:"#991b1b" };
-const emptyBox = { padding:16, background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8 };
+const table = { width:"100%", borderCollapse:"collapse", fontSize:14 };
+const th = { textAlign:"left", padding:"10px 8px", borderBottom:"1px solid #e2e8f0", background:"#f8fafc" };
+const td = { padding:"8px 8px", borderBottom:"1px solid #f1f5f9" };
