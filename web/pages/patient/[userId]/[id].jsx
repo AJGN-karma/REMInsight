@@ -8,6 +8,8 @@ import { onAuthStateChanged } from "firebase/auth";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
+const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_UID;
+
 function riskLabel(v) {
   return v === 2 ? "High" : v === 1 ? "Moderate" : v === 0 ? "Low" : "-";
 }
@@ -17,7 +19,9 @@ function riskColor(label) {
 
 export default function PatientReportPage() {
   const router = useRouter();
-  const { userId, id } = router.query;
+  // Support both /patient/:userId/:id and /patient/:userId/:recordId
+  const { userId, id: rid, recordId: rid2 } = router.query;
+  const recId = (rid ?? rid2) ? String(rid ?? rid2) : undefined;
 
   const [authUser, setAuthUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -38,25 +42,24 @@ export default function PatientReportPage() {
 
   // load doc
   useEffect(() => {
-    if (!userId || !id) return;
+    if (!userId || !recId) return;
     if (loadingAuth) return;
     (async () => {
       setLoading(true);
       setErr("");
       try {
-        const d = await getPredictionById(String(userId), String(id));
-        if (!d) {
-          setErr("Record not found.");
-        } else {
-          setDoc(d);
-        }
+        const d = await getPredictionById(String(userId), String(recId));
+        if (!d) setErr("Record not found.");
+        else setDoc(d);
       } catch (e) {
         setErr(String(e));
       } finally {
         setLoading(false);
       }
     })();
-  }, [userId, id, loadingAuth]);
+  }, [userId, recId, loadingAuth]);
+
+  const canView = authUser && (authUser.uid === userId || authUser.uid === ADMIN_UID);
 
   // probs for chart
   const probs = useMemo(() => {
@@ -124,15 +127,18 @@ export default function PatientReportPage() {
     pdf.autoTable({
       startY: 132,
       styles: { fontSize: 11 },
-      head: [['Name','Age','Gender']],
+      head: [['Name','Age','Gender','Sleep Quality','Avg Sleep (h)']],
       body: [[
         doc.personalInfo?.name || "-",
         String(doc.personalInfo?.age ?? "-"),
-        doc.personalInfo?.gender || "-"
+        doc.personalInfo?.gender || "-",
+        String(doc.personalInfo?.sleepQuality ?? "-"),
+        String(doc.personalInfo?.sleepDuration ?? "-"),
       ]]
     });
 
     // Results
+    const probsArr = probs || [];
     pdf.setFontSize(13);
     pdf.text("Model Result", 40, pdf.lastAutoTable.finalY + 24);
     pdf.autoTable({
@@ -141,9 +147,9 @@ export default function PatientReportPage() {
       head: [['Risk','Prob (Low)','Prob (Moderate)','Prob (High)']],
       body: [[
         predLbl,
-        String((probs[0]||0).toFixed(4)),
-        String((probs[1]||0).toFixed(4)),
-        String((probs[2]||0).toFixed(4)),
+        String((probsArr[0]||0).toFixed(4)),
+        String((probsArr[1]||0).toFixed(4)),
+        String((probsArr[2]||0).toFixed(4)),
       ]]
     });
 
@@ -185,6 +191,15 @@ export default function PatientReportPage() {
   if (!doc) {
     return <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>Not found.</div>;
   }
+  if (!canView) {
+    return (
+      <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
+        <div style={{ padding: 12, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#991b1b" }}>
+          Permission denied: you are not authorized to view this record.
+        </div>
+      </div>
+    );
+  }
 
   const firstRow = Array.isArray(doc.rows) && doc.rows.length ? doc.rows[0] : {};
   const firstRes = doc.apiResponse?.results?.[0] || {};
@@ -192,9 +207,7 @@ export default function PatientReportPage() {
 
   return (
     <div style={{ maxWidth: 1000, margin: "24px auto", padding: 16 }}>
-      <Head>
-        <title>Patient Report</title>
-      </Head>
+      <Head><title>Patient Report</title></Head>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>🧾 Patient Report</h1>
@@ -214,6 +227,8 @@ export default function PatientReportPage() {
           <Info title="Patient" value={doc.personalInfo?.name || "-"} />
           <Info title="Age" value={String(doc.personalInfo?.age ?? "-")} />
           <Info title="Gender" value={doc.personalInfo?.gender || "-"} />
+          <Info title="Sleep Quality" value={String(doc.personalInfo?.sleepQuality ?? "-")} />
+          <Info title="Avg Sleep (h)" value={String(doc.personalInfo?.sleepDuration ?? "-")} />
         </div>
       </div>
 
@@ -258,7 +273,6 @@ export default function PatientReportPage() {
         </table>
       </div>
 
-      {/* Optional notes */}
       {doc.personalInfo?.medicalHistory ? (
         <div style={{ ...card, marginTop: 12 }}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>Medical History (Patient Provided)</div>
