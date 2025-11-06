@@ -1,5 +1,5 @@
 // web/pages/index.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 
 import { apiHealth, getFeatures, predict } from "../src/lib/api";
@@ -12,19 +12,26 @@ import {
   savePredictionRecordUpsert,
 } from "../src/lib/firebase";
 
+import PersonalInfoForm from "../src/components/PersonalInfoForm";
+import DataCollection from "../src/components/DataCollection";
+import ResultsDashboard from "../src/components/ResultsDashboard";
+
 export default function Home() {
   const [health, setHealth] = useState(null);
-  const [step, setStep] = useState("personal");
+  const [step, setStep] = useState("personal"); // personal -> data -> results
   const [personalInfo, setPersonalInfo] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [analysisId, setAnalysisId] = useState(null);
+
+  const analysisIdRef = useRef(null);       // ✅ stable id per analysis session
   const [savedOnce, setSavedOnce] = useState(false);
+
   const [uploadedRows, setUploadedRows] = useState(null);
   const [apiFeatures, setApiFeatures] = useState([]);
   const [analysisResults, setAnalysisResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  // Health + features once
   useEffect(() => {
     (async () => {
       try {
@@ -37,6 +44,7 @@ export default function Home() {
     })();
   }, []);
 
+  // ---------- helpers ----------
   async function ensureAuthMatchesUser(expectedUid) {
     // If not signed in, sign in anonymously and sync userId
     if (!auth.currentUser) {
@@ -47,13 +55,33 @@ export default function Home() {
       }
       return u.uid;
     }
-    // If signed in as someone else, block (rules would deny anyway)
+    // If signed in as someone else, block
     if (expectedUid && auth.currentUser.uid !== expectedUid) {
       throw new Error("Signed-in user differs from patient ID. Sign out and try again.");
     }
     return auth.currentUser.uid;
   }
 
+  function initAnalysisIdIfNeeded() {
+    if (!analysisIdRef.current) {
+      const cached = typeof window !== "undefined" ? sessionStorage.getItem("analysis_id") : null;
+      analysisIdRef.current = cached || generateAnalysisId();
+      if (!cached && typeof window !== "undefined") {
+        sessionStorage.setItem("analysis_id", analysisIdRef.current);
+      }
+    }
+    return analysisIdRef.current;
+  }
+
+  function resetAnalysisSession() {
+    analysisIdRef.current = null;
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("analysis_id");
+    }
+    setSavedOnce(false);
+  }
+
+  // ---------- step 1: personal ----------
   const onPersonalComplete = async (data) => {
     try {
       setErr("");
@@ -78,8 +106,7 @@ export default function Home() {
         });
       }
 
-      setAnalysisId(null);
-      setSavedOnce(false);
+      resetAnalysisSession();       // ✅ new session id for next analysis
       setStep("data");
     } catch (e) {
       setErr(e.message || "Failed to initialize user.");
@@ -88,6 +115,7 @@ export default function Home() {
     }
   };
 
+  // ---------- step 2: data -> predict -> save (idempotent) ----------
   const onDataCollected = async (rows) => {
     setErr("");
     setBusy(true);
@@ -101,16 +129,19 @@ export default function Home() {
       }
 
       setUploadedRows(rows);
+
+      // Predict
       const modelResp = await predict(rows);
       setAnalysisResults(modelResp);
       setStep("results");
 
-      const aid = analysisId || generateAnalysisId();
-      setAnalysisId(aid);
+      // Stable analysis id for this session
+      const aid = initAnalysisIdIfNeeded();
 
       // Ensure auth user matches this patient id before writing
       await ensureAuthMatchesUser(userId);
 
+      // Save (idempotent upsert)
       const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
       const res = await savePredictionRecordUpsert(userId, aid, {
         personalInfo: personalInfo || null,
@@ -130,34 +161,32 @@ export default function Home() {
     }
   };
 
-  function manualSave() {
+  // ---------- manual re-save (same id) ----------
+  async function manualSave() {
     if (!userId) return alert("User not initialized");
     if (!analysisResults || !uploadedRows) return alert("Nothing to save");
     if (savedOnce) {
       alert("Already saved for this analysis session.");
       return;
     }
-    (async () => {
-      try {
-        await ensureAuthMatchesUser(userId);
-        const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
-        const aid = analysisId || generateAnalysisId();
-        setAnalysisId(aid);
-        const r = await savePredictionRecordUpsert(userId, aid, {
-          personalInfo: personalInfo || null,
-          rows: uploadedRows || [],
-          apiResponse: analysisResults || null,
-          clientMeta,
-        });
-        if (!r.ok) alert("Save failed: " + r.error);
-        else {
-          alert("Saved.");
-          setSavedOnce(true);
-        }
-      } catch (e) {
-        alert(e.message || "Save blocked.");
+    try {
+      await ensureAuthMatchesUser(userId);
+      const aid = initAnalysisIdIfNeeded();
+      const clientMeta = { ua: navigator.userAgent, url: window.location.href, ts: Date.now() };
+      const r = await savePredictionRecordUpsert(userId, aid, {
+        personalInfo: personalInfo || null,
+        rows: uploadedRows || [],
+        apiResponse: analysisResults || null,
+        clientMeta,
+      });
+      if (!r.ok) alert("Save failed: " + r.error);
+      else {
+        alert("Saved.");
+        setSavedOnce(true);
       }
-    })();
+    } catch (e) {
+      alert(e.message || "Save blocked.");
+    }
   }
 
   const bar = { background: "#fff", borderBottom: "1px solid #e5e7eb", position: "sticky", top: 0, zIndex: 10 };
@@ -282,11 +311,19 @@ export default function Home() {
                 <button
                   onClick={() => {
                     setAnalysisResults(null);
-                    setSavedOnce(false);
-                    setAnalysisId(null);
+                    setUploadedRows(null);
+                    resetAnalysisSession();     // ✅ clear id for a brand-new analysis
                     setStep("personal");
                   }}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "none", background: "#0ea5e9", color: "#fff", cursor: "pointer", fontWeight: 600 }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: "#0ea5e9",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
                 >
                   New Analysis
                 </button>
