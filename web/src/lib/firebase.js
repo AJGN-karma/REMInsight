@@ -28,7 +28,6 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  // No storageBucket needed for Firestore-base64 approach
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
@@ -94,10 +93,8 @@ export async function upsertUserProfile(userId, profile) {
  * Firestore has ~1MB/doc limit. We’ll store:
  * - Small files (<= 800KB base64) inline in the doc.
  * - Larger files in chunks: users/{uid}/uploads/{uploadId}/chunks/{i}.
- *
- * Return shape: { id, name, mimeType, sizeBytes, chunked: boolean }
  */
-const BASE64_INLINE_LIMIT = 800 * 1024; // ~800KB budget
+const BASE64_INLINE_LIMIT = 800 * 1024; // ~800KB
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -111,9 +108,7 @@ function fileToBase64(file) {
     r.readAsDataURL(file);
   });
 }
-
 function base64SizeBytes(b64) {
-  // rough: 3/4 of length
   return Math.floor((b64.length * 3) / 4);
 }
 
@@ -125,7 +120,6 @@ export async function uploadMedicalFileBase64(file, label, userId) {
   const uploadsCol = collection(doc(db, "users", userId), "uploads");
 
   if (sizeBytes <= BASE64_INLINE_LIMIT) {
-    // Inline store
     const docRef = await addDoc(uploadsCol, {
       name,
       mimeType,
@@ -137,29 +131,25 @@ export async function uploadMedicalFileBase64(file, label, userId) {
     return { id: docRef.id, name, mimeType, sizeBytes, chunked: false };
   }
 
-  // Chunk store
+  // Chunked
   const parentRef = await addDoc(uploadsCol, {
     name,
     mimeType,
     sizeBytes,
     chunked: true,
-    totalChunks: 0, // set after we write chunks
+    totalChunks: 0,
     createdAt: serverTimestamp(),
   });
 
-  // Chunk into ~600KB base64 segments for safety
-  const CHUNK_SIZE = 600 * 1024;
+  const CHUNK_SIZE = 600 * 1024; // 600KB
   const chunks = [];
   for (let i = 0; i < base64.length; i += CHUNK_SIZE) {
     chunks.push(base64.slice(i, i + CHUNK_SIZE));
   }
-
   const chunksCol = collection(parentRef, "chunks");
-  let idx = 0;
-  for (const c of chunks) {
+  for (let i = 0; i < chunks.length; i++) {
     // eslint-disable-next-line no-await-in-loop
-    await addDoc(chunksCol, { idx, data: c });
-    idx++;
+    await addDoc(chunksCol, { idx: i, data: chunks[i] });
   }
   await setDoc(parentRef, { totalChunks: chunks.length }, { merge: true });
 
@@ -173,9 +163,6 @@ export async function uploadMedicalFileBase64(file, label, userId) {
   };
 }
 
-/**
- * Reconstruct a PDF and return an Object URL for viewing/printing.
- */
 export async function getMedicalFileURL(userId, uploadId) {
   const ref = doc(db, "users", userId, "uploads", uploadId);
   const snap = await getDoc(ref);
@@ -193,10 +180,9 @@ export async function getMedicalFileURL(userId, uploadId) {
     base64 = chunksSnap.docs.map((d) => d.data().data || "").join("");
   }
 
-  // Convert base64 → Blob → ObjectURL
   const byteCharacters = atob(base64);
   const byteArrays = [];
-  const sliceSize = 1024 * 32;
+  const sliceSize = 32 * 1024;
   for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
     const slice = byteCharacters.slice(offset, offset + sliceSize);
     const byteNumbers = new Array(slice.length);
@@ -208,19 +194,36 @@ export async function getMedicalFileURL(userId, uploadId) {
   return { url, mimeType, name: meta.name || "medical-report.pdf" };
 }
 
-/* ----------------------- PREDICTIONS: WRITE/READ ---------------------- */
-export async function savePredictionRecord(userId, payload) {
+/* -------------------------- ANALYSIS UPSERT --------------------------- */
+/** Generate a stable analysisId per session (prevents duplicate saves). */
+export function generateAnalysisId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `aid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Idempotent save at users/{userId}/predictions/{analysisId} */
+export async function savePredictionRecordUpsert(userId, analysisId, payload) {
   try {
-    const predCol = collection(doc(db, "users", userId), "predictions");
-    const docRef = await addDoc(predCol, { ...payload, createdAt: serverTimestamp() });
-    return { ok: true, id: docRef.id };
+    const ref = doc(db, "users", userId, "predictions", analysisId);
+    await setDoc(
+      ref,
+      {
+        ...payload,
+        id: analysisId,
+        createdAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { ok: true, id: analysisId };
   } catch (e) {
-    console.error("[Firestore] save failed:", e);
+    console.error("[Firestore] upsert failed:", e);
     return { ok: false, error: String(e) };
   }
 }
 
-/** Admin: list all predictions (across users). Adds userId from ref. */
+/* ----------------------- PREDICTIONS: READS --------------------------- */
 export async function listAllPredictions(limitCount = 200) {
   const cg = collectionGroup(db, "predictions");
   const qy = query(cg, orderBy("createdAt", "desc"), qLimit(limitCount));
@@ -230,7 +233,7 @@ export async function listAllPredictions(limitCount = 200) {
     const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
     const userId = d.ref.parent.parent ? d.ref.parent.parent.id : "";
     return {
-      id: d.id,
+      id: data.id || d.id,
       userId,
       ...data,
       createdAtDate: ts,
@@ -239,7 +242,6 @@ export async function listAllPredictions(limitCount = 200) {
   });
 }
 
-/** Patient: list by user */
 export async function listPredictionsByUser(userId, limitCount = 50) {
   const predCol = collection(doc(db, "users", userId), "predictions");
   const qy = query(predCol, orderBy("createdAt", "desc"), qLimit(limitCount));
@@ -248,7 +250,7 @@ export async function listPredictionsByUser(userId, limitCount = 50) {
     const data = d.data();
     const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
     return {
-      id: d.id,
+      id: data.id || d.id,
       userId,
       ...data,
       createdAtDate: ts,
@@ -263,7 +265,7 @@ export async function getPredictionById(userId, recordId) {
   if (!snap.exists()) return null;
   const data = snap.data();
   const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-  return { id: snap.id, userId, ...data, createdAtDate: ts, createdAtISO: ts ? ts.toISOString() : "" };
+  return { id: data.id || snap.id, userId, ...data, createdAtDate: ts, createdAtISO: ts ? ts.toISOString() : "" };
 }
 
 /* ---------------------------- CSV EXPORT ----------------------------- */
