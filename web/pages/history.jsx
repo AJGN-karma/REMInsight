@@ -47,7 +47,6 @@ export default function HistoryPage() {
 
   // 2) If admin wants full history → PIN gate
   useEffect(() => {
-    // Only prompt for PIN if user will try to use admin mode
     if (!isAdmin) return;
     const cached = typeof window !== "undefined" ? sessionStorage.getItem("hist_auth") : null;
     if (cached && PIN && cached === PIN) {
@@ -154,9 +153,7 @@ export default function HistoryPage() {
 
   return (
     <div style={{ maxWidth: 1100, margin: "24px auto", padding: 16 }}>
-      <Head>
-        <title>History</title>
-      </Head>
+      <Head><title>History</title></Head>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>📚 History</h1>
@@ -235,7 +232,8 @@ export default function HistoryPage() {
                       <td style={td}>{firstRow.psqi_global ?? "-"}</td>
                       <td style={{ ...td, fontWeight: 600, color: colorForRisk(riskLabel) }}>{riskLabel}</td>
                       <td style={td}>
-                        <Link href={`/patient/${r.id}`} style={{ color: "#2563eb" }}>
+                        {/* ✅ FIX: route needs userId + record id */}
+                        <Link href={`/patient/${r.userId || (authUser?.uid || "")}/${r.id}`} style={{ color: "#2563eb" }}>
                           View
                         </Link>
                       </td>
