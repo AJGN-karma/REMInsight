@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+// web/pages/patient/[userId]/index.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -39,14 +40,8 @@ export default function PatientHistoryPage() {
       setLoading(true);
       setErr("");
       try {
-        // up to 200 recent records for this user
         const data = await listPredictionsByUser(String(userId), 200);
-        setRows(
-          data.map((d) => ({
-            ...d,
-            createdAtDate: d.createdAtISO ? new Date(d.createdAtISO) : null,
-          }))
-        );
+        setRows(data);
       } catch (e) {
         setErr(String(e));
       } finally {
@@ -56,7 +51,6 @@ export default function PatientHistoryPage() {
   }, [userId, loadingAuth, canView]);
 
   const patient = useMemo(() => {
-    // use the newest record's personalInfo as the header
     const newest = rows[0];
     return newest?.personalInfo || {};
   }, [rows]);
@@ -67,14 +61,12 @@ export default function PatientHistoryPage() {
     const pdf = new jsPDF({ unit: "pt", format: "a4" });
     const marginX = 40;
 
-    // Header
     pdf.setFontSize(16);
     pdf.text("REMInsight — Patient Full History", marginX, 40);
     pdf.setFontSize(11);
     pdf.text(`Patient User ID: ${userId}`, marginX, 60);
     pdf.text(`Records: ${rows.length}`, marginX, 76);
 
-    // Patient info overview
     pdf.setFontSize(13);
     pdf.text("Patient Information (latest)", marginX, 100);
     pdf.autoTable({
@@ -90,7 +82,6 @@ export default function PatientHistoryPage() {
       ]],
     });
 
-    // Per-visit table
     pdf.setFontSize(13);
     pdf.text("Visit History", marginX, (pdf.lastAutoTable?.finalY || 108) + 24);
 
@@ -100,14 +91,7 @@ export default function PatientHistoryPage() {
       const low = (probs[0] ?? 0).toFixed(3);
       const mod = (probs[1] ?? 0).toFixed(3);
       const high = (probs[2] ?? 0).toFixed(3);
-      return [
-        r.createdAtISO || "-",
-        riskLabel(res0.pred_risk),
-        low,
-        mod,
-        high,
-        r.id,
-      ];
+      return [ r.createdAtISO || "-", riskLabel(res0.pred_risk), low, mod, high, r.id ];
     });
 
     pdf.autoTable({
@@ -126,7 +110,7 @@ export default function PatientHistoryPage() {
   if (!canView) {
     return (
       <div style={{ maxWidth: 1000, margin: "24px auto", padding: 16 }}>
-        <div style={{ padding: 12, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#991b1b" }}>
+        <div style={{ padding: 12, background: "#fef2f2", border: "1px solid "#fecaca", borderRadius: 8, color: "#991b1b" }}>
           Permission denied: you are not authorized to view this patient’s history.
         </div>
       </div>
@@ -145,7 +129,6 @@ export default function PatientHistoryPage() {
         </div>
       </div>
 
-      {/* Patient summary */}
       <div style={panel}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
           <Info title="Name" value={patient?.name || "-"} />
@@ -157,7 +140,6 @@ export default function PatientHistoryPage() {
         </div>
       </div>
 
-      {/* Visits table */}
       <div style={{ ...panel, padding: 0, marginTop: 12 }}>
         {loading ? (
           <div style={{ padding: 12 }}>Loading…</div>
@@ -189,10 +171,8 @@ export default function PatientHistoryPage() {
                       <td style={td}>{(probs[0] ?? 0).toFixed(3)}</td>
                       <td style={td}>{(probs[1] ?? 0).toFixed(3)}</td>
                       <td style={td}>{(probs[2] ?? 0).toFixed(3)}</td>
-                      <td style={td} title={r.id} >{r.id}</td>
-                      <td style={td}>
-                        <Link href={`/patient/${r.userId}/${r.id}`} style={{ color: "#2563eb" }}>View</Link>
-                      </td>
+                      <td style={td} title={r.id}>{r.id}</td>
+                      <td style={td}><Link href={`/patient/${r.userId}/${r.id}`} style={{ color: "#2563eb" }}>View</Link></td>
                     </tr>
                   );
                 })}
