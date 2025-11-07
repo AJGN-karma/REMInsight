@@ -2,17 +2,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import {
-  auth,
-  exportArrayToCSV,
-  listAllPredictions,
-  normalizeDocForCSV,
-} from "../src/lib/firebase";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-} from "firebase/auth";
+import { auth, exportArrayToCSV, listAllPredictions, normalizeDocForCSV } from "../src/lib/firebase";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 const PIN = process.env.NEXT_PUBLIC_ADMIN_PIN;
 const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_UID;
@@ -86,12 +77,7 @@ export default function AdminPage() {
       setErr("");
       try {
         const data = await listAllPredictions(1000);
-        setRows(
-          data.map((d) => ({
-            ...d,
-            createdAtDate: d.createdAtISO ? new Date(d.createdAtISO) : null,
-          }))
-        );
+        setRows(data);
       } catch (e) {
         setErr(String(e));
       } finally {
@@ -223,9 +209,7 @@ export default function AdminPage() {
     setSigningIn(true);
     setAuthError("");
     try {
-      if (!adminEmail || !adminPass) {
-        throw new Error("Enter admin email and password.");
-      }
+      if (!adminEmail || !adminPass) throw new Error("Enter admin email and password.");
       const cred = await signInWithEmailAndPassword(auth, adminEmail, adminPass);
       if (cred.user.uid !== ADMIN_UID) {
         await signOut(auth);
@@ -242,7 +226,6 @@ export default function AdminPage() {
     await signOut(auth);
   }
 
-  // PIN didn’t pass
   if (!pinOk) {
     return (
       <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
@@ -252,37 +235,21 @@ export default function AdminPage() {
     );
   }
 
-  // Need to authenticate as admin
   if (loadingAuth || !authUser) {
     return (
       <div style={{ maxWidth: 560, margin: "40px auto", padding: 16 }}>
         <Head><title>Admin Login</title></Head>
         <h1>🔐 Admin Login</h1>
         <form onSubmit={doAdminSignIn} style={{ display: "grid", gap: 12, maxWidth: 360 }}>
-          <input
-            type="email"
-            placeholder="Admin email"
-            value={adminEmail}
-            onChange={(e) => setAdminEmail(e.target.value)}
-            style={inp}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={adminPass}
-            onChange={(e) => setAdminPass(e.target.value)}
-            style={inp}
-          />
+          <input type="email" placeholder="Admin email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} style={inp} />
+          <input type="password" placeholder="Password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} style={inp} />
           {authError && <div style={alertErr}>{authError}</div>}
-          <button type="submit" style={btnPrimary} disabled={signingIn}>
-            {signingIn ? "Signing in…" : "Sign in"}
-          </button>
+          <button type="submit" style={btnPrimary} disabled={signingIn}>{signingIn ? "Signing in…" : "Sign in"}</button>
         </form>
       </div>
     );
   }
 
-  // Signed in but not the configured admin
   if (authUser && authUser.uid !== ADMIN_UID) {
     return (
       <div style={{ maxWidth: 900, margin: "40px auto", padding: 16 }}>
@@ -293,7 +260,6 @@ export default function AdminPage() {
     );
   }
 
-  // Admin view
   return (
     <div style={{ maxWidth: 1200, margin: "24px auto", padding: 16 }}>
       <Head><title>Admin Console</title></Head>
@@ -383,7 +349,6 @@ export default function AdminPage() {
                       <td style={{ ...td, fontWeight: 600, color: riskColor(label) }}>{label}</td>
                       <td style={td}>{r.id}</td>
                       <td style={td}>
-                        {/* ✅ open patient printable/PDF page */}
                         <Link href={`/patient/${r.userId}/${r.id}`} style={{ color: "#2563eb" }}>View</Link>
                       </td>
                     </tr>
