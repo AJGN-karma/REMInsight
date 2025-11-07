@@ -1,3 +1,4 @@
+// web/pages/patient/[userId]/[id].jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
@@ -18,7 +19,6 @@ function riskColor(label) {
 
 export default function PatientReportPage() {
   const router = useRouter();
-  // Support both /patient/:userId/:id and /patient/:userId/:recordId
   const { userId, id: rid, recordId: rid2 } = router.query;
   const recId = (rid ?? rid2) ? String(rid ?? rid2) : undefined;
 
@@ -30,7 +30,6 @@ export default function PatientReportPage() {
 
   const chartRef = useRef(null);
 
-  // track auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setAuthUser(u || null);
@@ -39,7 +38,6 @@ export default function PatientReportPage() {
     return () => unsub();
   }, []);
 
-  // load this record
   useEffect(() => {
     if (!userId || !recId) return;
     if (loadingAuth) return;
@@ -60,13 +58,11 @@ export default function PatientReportPage() {
 
   const canView = authUser && (authUser.uid === userId || authUser.uid === ADMIN_UID);
 
-  // probs for chart
   const probs = useMemo(() => {
     const pr = doc?.apiResponse?.results?.[0]?.probs || [];
     return pr.length ? pr : [0, 0, 0];
   }, [doc]);
 
-  // draw simple bar chart
   useEffect(() => {
     const cvs = chartRef.current;
     if (!cvs) return;
@@ -76,7 +72,6 @@ export default function PatientReportPage() {
     const labels = ["Low", "Moderate", "High"];
     const max = Math.max(...probs, 1);
 
-    // axes
     ctx.strokeStyle = "#94a3b8";
     ctx.beginPath();
     ctx.moveTo(40, 20);
@@ -84,7 +79,6 @@ export default function PatientReportPage() {
     ctx.lineTo(W - 10, H - 30);
     ctx.stroke();
 
-    // bars
     const bw = 60, gap = 30;
     const startX = 60;
     for (let i = 0; i < 3; i++) {
@@ -120,54 +114,50 @@ export default function PatientReportPage() {
     pdf.text(`User ID: ${doc.userId}`, 40, 80);
     pdf.text(`Created: ${doc.createdAtISO || "-"}`, 40, 96);
 
-    // Patient info
     pdf.setFontSize(13);
     pdf.text("Patient Information", 40, 124);
     pdf.autoTable({
       startY: 132,
       styles: { fontSize: 11 },
-      head: [["Name", "Age", "Gender", "Sleep Quality", "Avg Sleep (h)"]],
+      head: [['Name','Age','Gender','Sleep Quality','Avg Sleep (h)']],
       body: [[
         doc.personalInfo?.name || "-",
         String(doc.personalInfo?.age ?? "-"),
         doc.personalInfo?.gender || "-",
         String(doc.personalInfo?.sleepQuality ?? "-"),
         String(doc.personalInfo?.sleepDuration ?? "-"),
-      ]],
+      ]]
     });
 
-    // Results
     const probsArr = probs || [];
     pdf.setFontSize(13);
     pdf.text("Model Result", 40, (pdf.lastAutoTable?.finalY || 132) + 24);
     pdf.autoTable({
       startY: (pdf.lastAutoTable?.finalY || 132) + 30,
       styles: { fontSize: 11 },
-      head: [["Risk", "Prob (Low)", "Prob (Moderate)", "Prob (High)"]],
+      head: [['Risk','Prob (Low)','Prob (Moderate)','Prob (High)']],
       body: [[
         predLbl,
-        String((probsArr[0] || 0).toFixed(4)),
-        String((probsArr[1] || 0).toFixed(4)),
-        String((probsArr[2] || 0).toFixed(4)),
-      ]],
+        String((probsArr[0]||0).toFixed(4)),
+        String((probsArr[1]||0).toFixed(4)),
+        String((probsArr[2]||0).toFixed(4)),
+      ]]
     });
 
-    // Objective subset
     pdf.setFontSize(13);
     pdf.text("Key Objective Inputs", 40, (pdf.lastAutoTable?.finalY || 132) + 24);
     pdf.autoTable({
       startY: (pdf.lastAutoTable?.finalY || 132) + 30,
       styles: { fontSize: 11 },
-      head: [["PSQI Global", "REM Total (min)", "REM Latency (min)", "REM %"]],
+      head: [['PSQI Global','REM Total (min)','REM Latency (min)','REM %']],
       body: [[
         String(firstRow.psqi_global ?? "-"),
         String(firstRow.REM_total_min ?? "-"),
         String(firstRow.REM_latency_min ?? "-"),
         String(firstRow.REM_pct ?? "-"),
-      ]],
+      ]]
     });
 
-    // Add chart image
     try {
       const cvs = chartRef.current;
       if (cvs) {
@@ -211,7 +201,6 @@ export default function PatientReportPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>🧾 Patient Report</h1>
         <div style={{ display: "flex", gap: 8 }}>
-          {/* quick nav */}
           <Link href={authUser?.uid ? "/history" : "/"} style={{ lineHeight: "32px" }}>← Back</Link>
           <Link href={`/patient/${doc.userId}`} style={{ lineHeight: "32px" }}>History</Link>
           <button onClick={doPrint} style={btn}>🖨 Print</button>
@@ -219,7 +208,6 @@ export default function PatientReportPage() {
         </div>
       </div>
 
-      {/* Header */}
       <div style={card}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12 }}>
           <Info title="Report ID" value={doc.id} />
@@ -233,16 +221,15 @@ export default function PatientReportPage() {
         </div>
       </div>
 
-      {/* Results + chart */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
         <div style={card}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>Model Output</div>
           <div><b>Predicted Risk:</b> <span style={{ color: riskColor(predLbl), fontWeight: 700 }}>{predLbl}</span></div>
           <div style={{ marginTop: 8 }}>Probabilities</div>
           <ul style={{ marginTop: 4 }}>
-            <li>Low: {(probs[0] || 0).toFixed(4)}</li>
-            <li>Moderate: {(probs[1] || 0).toFixed(4)}</li>
-            <li>High: {(probs[2] || 0).toFixed(4)}</li>
+            <li>Low: {(probs[0]||0).toFixed(4)}</li>
+            <li>Moderate: {(probs[1]||0).toFixed(4)}</li>
+            <li>High: {(probs[2]||0).toFixed(4)}</li>
           </ul>
         </div>
         <div style={card}>
@@ -251,7 +238,6 @@ export default function PatientReportPage() {
         </div>
       </div>
 
-      {/* Key objective inputs */}
       <div style={{ ...card, marginTop: 12 }}>
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Key Objective Inputs</div>
         <table style={table}>
@@ -263,8 +249,6 @@ export default function PatientReportPage() {
               <th style={th}>REM %</th>
             </tr>
           </thead>
-        </table>
-        <table style={table}>
           <tbody>
             <tr>
               <td style={td}>{firstRow.psqi_global ?? "-"}</td>
