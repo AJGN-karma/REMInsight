@@ -1,9 +1,10 @@
+// web/pages/dashboard.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import { db } from "../src/lib/firebase";
-import { collectionGroup, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { collectionGroup, getDocs, query, limit } from "firebase/firestore";
 
-// ---------- tiny chart helpers (no deps) ----------
+// ---------- tiny chart helpers ----------
 function drawAxes(ctx, W, H, pad) {
   ctx.strokeStyle = "#cbd5e1";
   ctx.lineWidth = 1;
@@ -95,39 +96,37 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const qy = query(
-          collectionGroup(db, "predictions"),
-          orderBy("createdAt", "desc"),
-          limit(500)
-        );
+        // No orderBy => no composite/collection-group field index required
+        const qy = query(collectionGroup(db, "predictions"), limit(500));
         const snap = await getDocs(qy);
         const arr = [];
-        snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+        snap.forEach((d) => {
+          const data = d.data();
+          const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+          arr.push({
+            id: data.id || d.id,
+            ...data,
+            createdAtDate: ts,
+          });
+        });
+        // Sort newest first in JS
+        arr.sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
         setDocs(arr);
       } catch (e) {
-        // If missing index, tell the user exactly what to do
-        if (String(e.code) === "failed-precondition") {
-          setErr(
-            "This dashboard needs a Firestore collection-group index on predictions.createdAt (desc). " +
-            "Create it in Firestore → Indexes → Composite: Collection group = predictions, Field = createdAt (Descending)."
-          );
-        } else {
-          setErr(String(e));
-        }
+        setErr(String(e));
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  // aggregates
   const { dist, timeline, confTrend } = useMemo(() => {
     const dist = [0, 0, 0];
     const timeline = [];
     const confTrend = [];
     const dayMap = new Map();
 
-    docs.forEach(d => {
+    docs.forEach((d) => {
       const r0 = d.apiResponse?.results?.[0];
       if (!r0) return;
       const pred = Number(r0.pred_risk ?? 1);
@@ -137,15 +136,14 @@ export default function Dashboard() {
       const maxP = probs.length ? Math.max(...probs) : null;
       if (maxP != null) confTrend.push(maxP);
 
-      const ts = d.createdAt?.toDate ? d.createdAt.toDate()
-        : (d.createdAt?._seconds ? new Date(d.createdAt._seconds * 1000) : null);
+      const ts = d.createdAtDate;
       const dayKey = ts ? ts.toISOString().slice(0, 10) : "unknown";
       if (!dayMap.has(dayKey)) dayMap.set(dayKey, []);
       dayMap.get(dayKey).push(pred);
     });
 
     const days = Array.from(dayMap.keys()).sort();
-    days.forEach(k => {
+    days.forEach((k) => {
       const arr = dayMap.get(k);
       const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
       timeline.push({ date: k, avg });
@@ -154,13 +152,16 @@ export default function Dashboard() {
     return { dist, timeline, confTrend };
   }, [docs]);
 
-  // draw charts
   useEffect(() => {
     if (barRef.current) drawBars(barRef.current, ["Low", "Moderate", "High"], dist, "Risk Distribution");
     if (lineRef.current) {
       if (timeline.length) {
-        drawLine(lineRef.current, timeline.map(t => t.date), timeline.map(t => t.avg),
-          "Average Predicted Risk Over Time (0=Low, 2=High)");
+        drawLine(
+          lineRef.current,
+          timeline.map((t) => t.date),
+          timeline.map((t) => t.avg),
+          "Average Predicted Risk Over Time (0=Low, 2=High)"
+        );
       } else {
         const ctx = lineRef.current.getContext("2d");
         ctx.clearRect(0, 0, lineRef.current.width, lineRef.current.height);
@@ -182,38 +183,40 @@ export default function Dashboard() {
     }
   }, [dist, timeline, confTrend]);
 
-  const card = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:16 };
+  const card = { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16 };
 
   return (
     <>
       <Head>
         <title>Patient Analytics Dashboard • REMInsight</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <main style={{ maxWidth: 1000, margin: "16px auto", padding: 16 }}>
         <h1 style={{ margin: "0 0 12px 0" }}>📊 Patient Analytics Dashboard</h1>
 
         {loading && <div style={card}>Loading…</div>}
-        {err && <div style={{...card, color:"#b91c1c", background:"#fef2f2"}}>Error: {err}</div>}
+        {err && <div style={{ ...card, color: "#b91c1c", background: "#fef2f2" }}>Error: {err}</div>}
 
         {!loading && !err && (
           <>
-            <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(220px,1fr))", marginBottom:12 }}>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))", marginBottom: 12 }}>
               <KPI title="Records Analyzed" value={docs.length} color="#2563eb" />
-              <KPI title="Low / Mod / High" value={`${dist[0]||0} / ${dist[1]||0} / ${dist[2]||0}`} color="#0ea5e9" />
-              <KPI title="Avg Confidence" value={
-                docs.length && confTrend.length ? (confTrend.reduce((a,b)=>a+b,0)/confTrend.length*100).toFixed(1)+"%" : "—"
-              } color="#10b981" />
+              <KPI title="Low / Mod / High" value={`${dist[0] || 0} / ${dist[1] || 0} / ${dist[2] || 0}`} color="#0ea5e9" />
+              <KPI
+                title="Avg Confidence"
+                value={docs.length && confTrend.length ? (confTrend.reduce((a, b) => a + b, 0) / confTrend.length * 100).toFixed(1) + "%" : "—"}
+                color="#10b981"
+              />
             </div>
 
-            <div style={{ display:"grid", gap:12, gridTemplateColumns:"1fr 1fr", marginBottom:12 }}>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr", marginBottom: 12 }}>
               <div style={card}><canvas ref={barRef} width={450} height={260} /></div>
               <div style={card}><canvas ref={confRef} width={450} height={260} /></div>
             </div>
 
             <div style={card}>
               <canvas ref={lineRef} width={940} height={300} />
-              <div style={{ fontSize:12, color:"#64748b", marginTop:6 }}>
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
                 Note: we don’t store ground-truth labels; confidence is a proxy, not accuracy.
               </div>
             </div>
@@ -226,9 +229,9 @@ export default function Dashboard() {
 
 function KPI({ title, value, color }) {
   return (
-    <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:12, padding:12 }}>
-      <div style={{ fontSize:12, color:"#475569" }}>{title}</div>
-      <div style={{ fontSize:20, fontWeight:700, color }}>{value}</div>
+    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 12 }}>
+      <div style={{ fontSize: 12, color: "#475569" }}>{title}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div>
     </div>
   );
 }
