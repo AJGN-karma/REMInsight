@@ -1,4 +1,3 @@
-// web/pages/patient/[userId]/[id].jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
@@ -31,7 +30,7 @@ export default function PatientReportPage() {
 
   const chartRef = useRef(null);
 
-  // auth
+  // track auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setAuthUser(u || null);
@@ -40,7 +39,7 @@ export default function PatientReportPage() {
     return () => unsub();
   }, []);
 
-  // load doc
+  // load this record
   useEffect(() => {
     if (!userId || !recId) return;
     if (loadingAuth) return;
@@ -73,32 +72,32 @@ export default function PatientReportPage() {
     if (!cvs) return;
     const ctx = cvs.getContext("2d");
     const W = cvs.width, H = cvs.height;
-    ctx.clearRect(0,0,W,H);
-    const labels = ["Low","Moderate","High"];
+    ctx.clearRect(0, 0, W, H);
+    const labels = ["Low", "Moderate", "High"];
     const max = Math.max(...probs, 1);
 
     // axes
     ctx.strokeStyle = "#94a3b8";
     ctx.beginPath();
     ctx.moveTo(40, 20);
-    ctx.lineTo(40, H-30);
-    ctx.lineTo(W-10, H-30);
+    ctx.lineTo(40, H - 30);
+    ctx.lineTo(W - 10, H - 30);
     ctx.stroke();
 
     // bars
     const bw = 60, gap = 30;
     const startX = 60;
-    for (let i=0;i<3;i++){
+    for (let i = 0; i < 3; i++) {
       const val = probs[i] || 0;
-      const h = ((H-60) * val) / max;
-      const x = startX + i*(bw+gap);
-      const y = (H-30) - h;
-      ctx.fillStyle = i===0 ? "#10b981" : i===1 ? "#f59e0b" : "#ef4444";
+      const h = ((H - 60) * val) / max;
+      const x = startX + i * (bw + gap);
+      const y = (H - 30) - h;
+      ctx.fillStyle = i === 0 ? "#10b981" : i === 1 ? "#f59e0b" : "#ef4444";
       ctx.fillRect(x, y, bw, h);
       ctx.fillStyle = "#334155";
       ctx.font = "12px sans-serif";
-      ctx.fillText(labels[i], x+8, H-10);
-      ctx.fillText(String(val.toFixed(3)), x+6, y-6);
+      ctx.fillText(labels[i], x + 8, H - 10);
+      ctx.fillText(String(val.toFixed(3)), x + 6, y - 6);
     }
   }, [probs]);
 
@@ -127,45 +126,45 @@ export default function PatientReportPage() {
     pdf.autoTable({
       startY: 132,
       styles: { fontSize: 11 },
-      head: [['Name','Age','Gender','Sleep Quality','Avg Sleep (h)']],
+      head: [["Name", "Age", "Gender", "Sleep Quality", "Avg Sleep (h)"]],
       body: [[
         doc.personalInfo?.name || "-",
         String(doc.personalInfo?.age ?? "-"),
         doc.personalInfo?.gender || "-",
         String(doc.personalInfo?.sleepQuality ?? "-"),
         String(doc.personalInfo?.sleepDuration ?? "-"),
-      ]]
+      ]],
     });
 
     // Results
     const probsArr = probs || [];
     pdf.setFontSize(13);
-    pdf.text("Model Result", 40, pdf.lastAutoTable.finalY + 24);
+    pdf.text("Model Result", 40, (pdf.lastAutoTable?.finalY || 132) + 24);
     pdf.autoTable({
-      startY: pdf.lastAutoTable.finalY + 30,
+      startY: (pdf.lastAutoTable?.finalY || 132) + 30,
       styles: { fontSize: 11 },
-      head: [['Risk','Prob (Low)','Prob (Moderate)','Prob (High)']],
+      head: [["Risk", "Prob (Low)", "Prob (Moderate)", "Prob (High)"]],
       body: [[
         predLbl,
-        String((probsArr[0]||0).toFixed(4)),
-        String((probsArr[1]||0).toFixed(4)),
-        String((probsArr[2]||0).toFixed(4)),
-      ]]
+        String((probsArr[0] || 0).toFixed(4)),
+        String((probsArr[1] || 0).toFixed(4)),
+        String((probsArr[2] || 0).toFixed(4)),
+      ]],
     });
 
     // Objective subset
     pdf.setFontSize(13);
-    pdf.text("Key Objective Inputs", 40, pdf.lastAutoTable.finalY + 24);
+    pdf.text("Key Objective Inputs", 40, (pdf.lastAutoTable?.finalY || 132) + 24);
     pdf.autoTable({
-      startY: pdf.lastAutoTable.finalY + 30,
+      startY: (pdf.lastAutoTable?.finalY || 132) + 30,
       styles: { fontSize: 11 },
-      head: [['PSQI Global','REM Total (min)','REM Latency (min)','REM %']],
+      head: [["PSQI Global", "REM Total (min)", "REM Latency (min)", "REM %"]],
       body: [[
         String(firstRow.psqi_global ?? "-"),
         String(firstRow.REM_total_min ?? "-"),
         String(firstRow.REM_latency_min ?? "-"),
         String(firstRow.REM_pct ?? "-"),
-      ]]
+      ]],
     });
 
     // Add chart image
@@ -174,8 +173,8 @@ export default function PatientReportPage() {
       if (cvs) {
         const img = cvs.toDataURL("image/png");
         pdf.setFontSize(13);
-        pdf.text("Risk Probabilities", 40, pdf.lastAutoTable.finalY + 24);
-        pdf.addImage(img, "PNG", 40, pdf.lastAutoTable.finalY + 30, 400, 180);
+        pdf.text("Risk Probabilities", 40, (pdf.lastAutoTable?.finalY || 132) + 24);
+        pdf.addImage(img, "PNG", 40, (pdf.lastAutoTable?.finalY || 132) + 30, 400, 180);
       }
     } catch {}
 
@@ -212,7 +211,9 @@ export default function PatientReportPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>🧾 Patient Report</h1>
         <div style={{ display: "flex", gap: 8 }}>
+          {/* quick nav */}
           <Link href={authUser?.uid ? "/history" : "/"} style={{ lineHeight: "32px" }}>← Back</Link>
+          <Link href={`/patient/${doc.userId}`} style={{ lineHeight: "32px" }}>History</Link>
           <button onClick={doPrint} style={btn}>🖨 Print</button>
           <button onClick={downloadPDF} style={btnPrimary}>⬇ Download PDF</button>
         </div>
@@ -239,9 +240,9 @@ export default function PatientReportPage() {
           <div><b>Predicted Risk:</b> <span style={{ color: riskColor(predLbl), fontWeight: 700 }}>{predLbl}</span></div>
           <div style={{ marginTop: 8 }}>Probabilities</div>
           <ul style={{ marginTop: 4 }}>
-            <li>Low: {(probs[0]||0).toFixed(4)}</li>
-            <li>Moderate: {(probs[1]||0).toFixed(4)}</li>
-            <li>High: {(probs[2]||0).toFixed(4)}</li>
+            <li>Low: {(probs[0] || 0).toFixed(4)}</li>
+            <li>Moderate: {(probs[1] || 0).toFixed(4)}</li>
+            <li>High: {(probs[2] || 0).toFixed(4)}</li>
           </ul>
         </div>
         <div style={card}>
@@ -262,6 +263,8 @@ export default function PatientReportPage() {
               <th style={th}>REM %</th>
             </tr>
           </thead>
+        </table>
+        <table style={table}>
           <tbody>
             <tr>
               <td style={td}>{firstRow.psqi_global ?? "-"}</td>
