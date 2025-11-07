@@ -9,11 +9,7 @@ import {
   listPredictionsByUser,
   normalizeDocForCSV,
 } from "../src/lib/firebase";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-} from "firebase/auth";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 const PIN = process.env.NEXT_PUBLIC_ADMIN_PIN;
 const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_UID;
@@ -70,23 +66,11 @@ export default function HistoryPage() {
       setErr("");
       try {
         if (isAdmin && pinOk) {
-          // admin sees everything
           const data = await listAllPredictions(500);
-          setRows(
-            data.map((d) => ({
-              ...d,
-              createdAtDate: d.createdAtISO ? new Date(d.createdAtISO) : null,
-            }))
-          );
+          setRows(data);
         } else if (authUser) {
-          // normal user sees only their own history
           const mine = await listPredictionsByUser(authUser.uid, 100);
-          setRows(
-            mine.map((d) => ({
-              ...d,
-              createdAtDate: d.createdAtISO ? new Date(d.createdAtISO) : null,
-            }))
-          );
+          setRows(mine);
         } else {
           setRows([]);
         }
@@ -164,27 +148,12 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      {/* If admin but not signed in as admin yet, show login form */}
       {isAdmin && !authUser && (
         <form onSubmit={doAdminSignIn} style={{ display: "grid", gap: 12, maxWidth: 360, marginBottom: 16 }}>
-          <input
-            type="email"
-            placeholder="Admin email"
-            value={adminEmail}
-            onChange={(e) => setAdminEmail(e.target.value)}
-            style={inp}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={adminPass}
-            onChange={(e) => setAdminPass(e.target.value)}
-            style={inp}
-          />
+          <input type="email" placeholder="Admin email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} style={inp} />
+          <input type="password" placeholder="Password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} style={inp} />
           {authError && <div style={alertErr}>{authError}</div>}
-          <button type="submit" style={btnPrimary} disabled={signingIn}>
-            {signingIn ? "Signing in…" : "Sign in"}
-          </button>
+          <button type="submit" style={btnPrimary} disabled={signingIn}>{signingIn ? "Signing in…" : "Sign in"}</button>
         </form>
       )}
 
@@ -196,7 +165,6 @@ export default function HistoryPage() {
         <div style={emptyBox}>No records yet.</div>
       ) : (
         <>
-          {/* Summary cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 16 }}>
             <KPI title="Total Analyses" value={summary.total} color="#2563eb" />
             <KPI title="Low Risk" value={summary.low} color="#10b981" />
@@ -221,8 +189,7 @@ export default function HistoryPage() {
                 {rows.map((r) => {
                   const firstRow = Array.isArray(r.rows) && r.rows.length ? r.rows[0] : {};
                   const pred = r.apiResponse?.results?.[0]?.pred_risk ?? null;
-                  const riskLabel =
-                    pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
+                  const riskLabel = pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
                   return (
                     <tr key={r.id}>
                       <td style={td}>{r.createdAtDate ? r.createdAtDate.toLocaleString() : "-"}</td>
@@ -232,7 +199,6 @@ export default function HistoryPage() {
                       <td style={td}>{firstRow.psqi_global ?? "-"}</td>
                       <td style={{ ...td, fontWeight: 600, color: colorForRisk(riskLabel) }}>{riskLabel}</td>
                       <td style={td}>
-                        {/* ✅ FIX: route needs userId + record id */}
                         <Link href={`/patient/${r.userId || (authUser?.uid || "")}/${r.id}`} style={{ color: "#2563eb" }}>
                           View
                         </Link>
@@ -269,4 +235,4 @@ const th = { textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e
 const td = { padding: "8px 8px", borderBottom: "1px solid #f1f5f9" };
 const alertErr = { padding: 12, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#991b1b" };
 const emptyBox = { padding: 16, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8 };
-const inp = { padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 8, width: "100%" };
+const inp = { padding: "8px 10px", border: "1px solid "#e2e8f0", borderRadius: 8, width: "100%" };
