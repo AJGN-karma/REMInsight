@@ -31,24 +31,6 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-(function sanityCheckEnv() {
-  const missing = Object.entries({
-    NEXT_PUBLIC_FIREBASE_API_KEY: firebaseConfig.apiKey,
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: firebaseConfig.authDomain,
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID: firebaseConfig.projectId,
-    NEXT_PUBLIC_FIREBASE_APP_ID: firebaseConfig.appId,
-  })
-    .filter(([, v]) => !v)
-    .map(([k]) => k);
-  if (missing.length) {
-    console.warn(
-      "[Firebase] Missing config keys:",
-      missing.join(", "),
-      "→ Set in Vercel → Project → Settings → Environment Variables."
-    );
-  }
-})();
-
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
@@ -89,11 +71,6 @@ export async function upsertUserProfile(userId, profile) {
 }
 
 /* ------------------------- PDF → Firestore Base64 --------------------- */
-/**
- * Firestore has ~1MB/doc limit. We’ll store:
- * - Small files (<= 800KB base64) inline in the doc.
- * - Larger files in chunks: users/{uid}/uploads/{uploadId}/chunks/{i}.
- */
 const BASE64_INLINE_LIMIT = 800 * 1024; // ~800KB
 
 function fileToBase64(file) {
@@ -141,7 +118,7 @@ export async function uploadMedicalFileBase64(file, label, userId) {
     createdAt: serverTimestamp(),
   });
 
-  const CHUNK_SIZE = 600 * 1024; // 600KB
+  const CHUNK_SIZE = 600 * 1024; // 600KB chars per chunk
   const chunks = [];
   for (let i = 0; i < base64.length; i += CHUNK_SIZE) {
     chunks.push(base64.slice(i, i + CHUNK_SIZE));
@@ -195,7 +172,6 @@ export async function getMedicalFileURL(userId, uploadId) {
 }
 
 /* -------------------------- ANALYSIS UPSERT --------------------------- */
-/** Generate a stable analysisId per session (prevents duplicate saves). */
 export function generateAnalysisId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -203,14 +179,18 @@ export function generateAnalysisId() {
   return `aid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** Idempotent save at users/{userId}/predictions/{analysisId} */
+// Ensure prediction docs stay SLIM (do not put file base64 here)
 export async function savePredictionRecordUpsert(userId, analysisId, payload) {
   try {
+    const safePayload = { ...payload };
+    // Hard guard: never allow large base64 on predictions
+    if (safePayload?.medicalFileBase64) delete safePayload.medicalFileBase64;
+
     const ref = doc(db, "users", userId, "predictions", analysisId);
     await setDoc(
       ref,
       {
-        ...payload,
+        ...safePayload,
         id: analysisId,
         createdAt: serverTimestamp(),
       },
@@ -223,40 +203,55 @@ export async function savePredictionRecordUpsert(userId, analysisId, payload) {
   }
 }
 
-/* ----------------------- PREDICTIONS: READS --------------------------- */
-export async function listAllPredictions(limitCount = 200) {
-  const cg = collectionGroup(db, "predictions");
-  const qy = query(cg, orderBy("createdAt", "desc"), qLimit(limitCount));
-  const snap = await getDocs(qy);
-  return snap.docs.map((d) => {
-    const data = d.data();
-    const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-    const userId = d.ref.parent.parent ? d.ref.parent.parent.id : "";
-    return {
-      id: data.id || d.id,
-      userId,
-      ...data,
-      createdAtDate: ts,
-      createdAtISO: ts ? ts.toISOString() : "",
-    };
-  });
+/* ---------------------------- MAPPERS -------------------------------- */
+function mapPredDoc(d, explicitUserId) {
+  const data = d.data();
+  const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+  const userId = explicitUserId || (d.ref.parent?.parent ? d.ref.parent.parent.id : "");
+  return {
+    id: data.id || d.id,
+    userId,
+    ...data,
+    createdAtDate: ts,
+    createdAtISO: ts ? ts.toISOString() : "",
+  };
 }
 
+/* ----------------------- PREDICTIONS: READS --------------------------- */
+// Admin: all predictions (collectionGroup)
+export async function listAllPredictions(limitCount = 200) {
+  const cg = collectionGroup(db, "predictions");
+
+  // Try with orderBy(createdAt) first
+  try {
+    const q1 = query(cg, orderBy("createdAt", "desc"), qLimit(limitCount));
+    const snap = await getDocs(q1);
+    return snap.docs.map((d) => mapPredDoc(d));
+  } catch (e) {
+    // If index missing, fallback that needs no composite/collection-group field index
+    const q2 = query(cg, orderBy("__name__", "desc"), qLimit(limitCount));
+    const snap = await getDocs(q2);
+    // sort in JS by createdAt if available
+    return snap.docs
+      .map((d) => mapPredDoc(d))
+      .sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
+  }
+}
+
+// Per-user history
 export async function listPredictionsByUser(userId, limitCount = 50) {
   const predCol = collection(doc(db, "users", userId), "predictions");
-  const qy = query(predCol, orderBy("createdAt", "desc"), qLimit(limitCount));
-  const snap = await getDocs(qy);
-  return snap.docs.map((d) => {
-    const data = d.data();
-    const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-    return {
-      id: data.id || d.id,
-      userId,
-      ...data,
-      createdAtDate: ts,
-      createdAtISO: ts ? ts.toISOString() : "",
-    };
-  });
+  try {
+    const q1 = query(predCol, orderBy("createdAt", "desc"), qLimit(limitCount));
+    const snap = await getDocs(q1);
+    return snap.docs.map((d) => mapPredDoc(d, userId));
+  } catch (e) {
+    const q2 = query(predCol, orderBy("__name__", "desc"), qLimit(limitCount));
+    const snap = await getDocs(q2);
+    return snap.docs
+      .map((d) => mapPredDoc(d, userId))
+      .sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
+  }
 }
 
 export async function getPredictionById(userId, recordId) {
@@ -265,7 +260,13 @@ export async function getPredictionById(userId, recordId) {
   if (!snap.exists()) return null;
   const data = snap.data();
   const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-  return { id: data.id || snap.id, userId, ...data, createdAtDate: ts, createdAtISO: ts ? ts.toISOString() : "" };
+  return {
+    id: data.id || snap.id,
+    userId,
+    ...data,
+    createdAtDate: ts,
+    createdAtISO: ts ? ts.toISOString() : "",
+  };
 }
 
 /* ---------------------------- CSV EXPORT ----------------------------- */
