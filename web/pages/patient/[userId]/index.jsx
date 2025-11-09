@@ -41,9 +41,10 @@ export default function PatientHistoryPage() {
       setErr("");
       try {
         const data = await listPredictionsByUser(String(userId), 200);
-        setRows(data);
+        setRows(data || []);
       } catch (e) {
-        setErr(String(e));
+        setErr(String(e?.message || e));
+        setRows([]);
       } finally {
         setLoading(false);
       }
@@ -61,12 +62,14 @@ export default function PatientHistoryPage() {
     const pdf = new jsPDF({ unit: "pt", format: "a4" });
     const marginX = 40;
 
+    // Header
     pdf.setFontSize(16);
     pdf.text("REMInsight — Patient Full History", marginX, 40);
     pdf.setFontSize(11);
     pdf.text(`Patient User ID: ${userId}`, marginX, 60);
     pdf.text(`Records: ${rows.length}`, marginX, 76);
 
+    // Patient info overview
     pdf.setFontSize(13);
     pdf.text("Patient Information (latest)", marginX, 100);
     pdf.autoTable({
@@ -82,12 +85,13 @@ export default function PatientHistoryPage() {
       ]],
     });
 
+    // Per-visit table
     pdf.setFontSize(13);
     pdf.text("Visit History", marginX, (pdf.lastAutoTable?.finalY || 108) + 24);
 
     const tableRows = rows.map((r) => {
-      const res0 = r.apiResponse?.results?.[0] || {};
-      const probs = Array.isArray(res0.probs) ? res0.probs : [];
+      const res0 = r?.apiResponse?.results?.[0] || {};
+      const probs = Array.isArray(res0?.probs) ? res0.probs : [];
       const low = (probs[0] ?? 0).toFixed(3);
       const mod = (probs[1] ?? 0).toFixed(3);
       const high = (probs[2] ?? 0).toFixed(3);
@@ -110,7 +114,7 @@ export default function PatientHistoryPage() {
   if (!canView) {
     return (
       <div style={{ maxWidth: 1000, margin: "24px auto", padding: 16 }}>
-        <div style={{ padding: 12, background: "#fef2f2", border: "1px solid "#fecaca", borderRadius: 8, color: "#991b1b" }}>
+        <div style={{ padding: 12, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#991b1b" }}>
           Permission denied: you are not authorized to view this patient’s history.
         </div>
       </div>
@@ -129,6 +133,7 @@ export default function PatientHistoryPage() {
         </div>
       </div>
 
+      {/* Patient summary */}
       <div style={panel}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
           <Info title="Name" value={patient?.name || "-"} />
@@ -140,6 +145,7 @@ export default function PatientHistoryPage() {
         </div>
       </div>
 
+      {/* Visits table */}
       <div style={{ ...panel, padding: 0, marginTop: 12 }}>
         {loading ? (
           <div style={{ padding: 12 }}>Loading…</div>
@@ -161,12 +167,15 @@ export default function PatientHistoryPage() {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const res0 = r.apiResponse?.results?.[0] || {};
-                  const probs = Array.isArray(res0.probs) ? res0.probs : [];
-                  const rl = riskLabel(res0.pred_risk);
+                  const res0 = r?.apiResponse?.results?.[0] || {};
+                  const probs = Array.isArray(res0?.probs) ? res0.probs : [];
+                  const rl = riskLabel(res0?.pred_risk);
+                  const when = r?.createdAtDate
+                    ? r.createdAtDate
+                    : (r?.createdAt?.toDate ? r.createdAt.toDate() : null);
                   return (
                     <tr key={r.id}>
-                      <td style={td}>{r.createdAtDate ? r.createdAtDate.toLocaleString() : "-"}</td>
+                      <td style={td}>{when ? when.toLocaleString() : "-"}</td>
                       <td style={{ ...td, fontWeight: 600, color: riskColor(rl) }}>{rl}</td>
                       <td style={td}>{(probs[0] ?? 0).toFixed(3)}</td>
                       <td style={td}>{(probs[1] ?? 0).toFixed(3)}</td>
