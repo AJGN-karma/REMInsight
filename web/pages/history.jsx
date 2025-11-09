@@ -67,15 +67,16 @@ export default function HistoryPage() {
       try {
         if (isAdmin && pinOk) {
           const data = await listAllPredictions(500);
-          setRows(data);
+          setRows(data || []);
         } else if (authUser) {
           const mine = await listPredictionsByUser(authUser.uid, 100);
-          setRows(mine);
+          setRows(mine || []);
         } else {
           setRows([]);
         }
       } catch (e) {
-        setErr(String(e));
+        setErr(String(e?.message || e));
+        setRows([]);
       } finally {
         setLoading(false);
       }
@@ -85,7 +86,7 @@ export default function HistoryPage() {
   const summary = useMemo(() => {
     const out = { total: rows.length, low: 0, mod: 0, high: 0 };
     rows.forEach((r) => {
-      const pred = r.apiResponse?.results?.[0]?.pred_risk;
+      const pred = r?.apiResponse?.results?.[0]?.pred_risk;
       if (pred === 0) out.low++;
       else if (pred === 1) out.mod++;
       else if (pred === 2) out.high++;
@@ -94,6 +95,7 @@ export default function HistoryPage() {
   }, [rows]);
 
   function exportCSV() {
+    if (!rows?.length) return;
     const normalized = rows.map(normalizeDocForCSV);
     exportArrayToCSV("predictions.csv", normalized, [
       "id",
@@ -125,7 +127,7 @@ export default function HistoryPage() {
         throw new Error("This account is not the configured admin (UID mismatch).");
       }
     } catch (e) {
-      setAuthError(e.message || "Sign-in failed");
+      setAuthError(e?.message || "Sign-in failed");
     } finally {
       setSigningIn(false);
     }
@@ -143,17 +145,32 @@ export default function HistoryPage() {
         <h1 style={{ margin: 0 }}>📚 History</h1>
         <div>
           <Link href="/" style={{ marginRight: 12 }}>← Back to App</Link>
-          {(isAdmin && pinOk) && <button onClick={exportCSV} style={btnPrimary}>⬇ Export CSV</button>}
+          {(isAdmin && pinOk && rows.length > 0) && <button onClick={exportCSV} style={btnPrimary}>⬇ Export CSV</button>}
           {authUser && <button onClick={doSignOut} style={btn}>Sign out</button>}
         </div>
       </div>
 
+      {/* Admin but not signed in yet */}
       {isAdmin && !authUser && (
         <form onSubmit={doAdminSignIn} style={{ display: "grid", gap: 12, maxWidth: 360, marginBottom: 16 }}>
-          <input type="email" placeholder="Admin email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} style={inp} />
-          <input type="password" placeholder="Password" value={adminPass} onChange={(e) => setAdminPass(e.target.value)} style={inp} />
+          <input
+            type="email"
+            placeholder="Admin email"
+            value={adminEmail}
+            onChange={(e) => setAdminEmail(e.target.value)}
+            style={inp}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={adminPass}
+            onChange={(e) => setAdminPass(e.target.value)}
+            style={inp}
+          />
           {authError && <div style={alertErr}>{authError}</div>}
-          <button type="submit" style={btnPrimary} disabled={signingIn}>{signingIn ? "Signing in…" : "Sign in"}</button>
+          <button type="submit" style={btnPrimary} disabled={signingIn}>
+            {signingIn ? "Signing in…" : "Sign in"}
+          </button>
         </form>
       )}
 
@@ -165,6 +182,7 @@ export default function HistoryPage() {
         <div style={emptyBox}>No records yet.</div>
       ) : (
         <>
+          {/* Summary cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 16 }}>
             <KPI title="Total Analyses" value={summary.total} color="#2563eb" />
             <KPI title="Low Risk" value={summary.low} color="#10b981" />
@@ -187,16 +205,19 @@ export default function HistoryPage() {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const firstRow = Array.isArray(r.rows) && r.rows.length ? r.rows[0] : {};
-                  const pred = r.apiResponse?.results?.[0]?.pred_risk ?? null;
+                  const firstRow = Array.isArray(r?.rows) && r.rows.length ? r.rows[0] : {};
+                  const pred = r?.apiResponse?.results?.[0]?.pred_risk ?? null;
                   const riskLabel = pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
+                  const when = r?.createdAtDate
+                    ? r.createdAtDate
+                    : (r?.createdAt?.toDate ? r.createdAt.toDate() : null);
                   return (
                     <tr key={r.id}>
-                      <td style={td}>{r.createdAtDate ? r.createdAtDate.toLocaleString() : "-"}</td>
-                      <td style={td}>{r.personalInfo?.name || "-"}</td>
-                      <td style={td}>{r.personalInfo?.age ?? "-"}</td>
-                      <td style={td}>{r.personalInfo?.gender || "-"}</td>
-                      <td style={td}>{firstRow.psqi_global ?? "-"}</td>
+                      <td style={td}>{when ? when.toLocaleString() : "-"}</td>
+                      <td style={td}>{r?.personalInfo?.name || "-"}</td>
+                      <td style={td}>{r?.personalInfo?.age ?? "-"}</td>
+                      <td style={td}>{r?.personalInfo?.gender || "-"}</td>
+                      <td style={td}>{firstRow?.psqi_global ?? "-"}</td>
                       <td style={{ ...td, fontWeight: 600, color: colorForRisk(riskLabel) }}>{riskLabel}</td>
                       <td style={td}>
                         <Link href={`/patient/${r.userId || (authUser?.uid || "")}/${r.id}`} style={{ color: "#2563eb" }}>
@@ -235,4 +256,4 @@ const th = { textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e
 const td = { padding: "8px 8px", borderBottom: "1px solid #f1f5f9" };
 const alertErr = { padding: 12, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#991b1b" };
 const emptyBox = { padding: 16, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8 };
-const inp = { padding: "8px 10px", border: "1px solid "#e2e8f0", borderRadius: 8, width: "100%" };
+const inp = { padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 8, width: "100%" };
