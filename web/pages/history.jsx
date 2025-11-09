@@ -8,11 +8,27 @@ import {
   listAllPredictions,
   listPredictionsByUser,
   normalizeDocForCSV,
+  updatePrediction,
+  deletePrediction,
 } from "../src/lib/firebase";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 const PIN = process.env.NEXT_PUBLIC_ADMIN_PIN;
 const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_UID;
+
+function labelFrom(pred, probs) {
+  const p = Number(pred);
+  if (p === 0 || p === 1 || p === 2) return p === 2 ? "High" : p === 1 ? "Moderate" : "Low";
+  if (Array.isArray(probs) && probs.length >= 3) {
+    const max = Math.max(probs[0] || 0, probs[1] || 0, probs[2] || 0);
+    const i = [probs[0] || 0, probs[1] || 0, probs[2] || 0].indexOf(max);
+    return i === 2 ? "High" : i === 1 ? "Moderate" : "Low";
+  }
+  return "-";
+}
+function colorForRisk(lbl) {
+  return lbl === "High" ? "#ef4444" : lbl === "Moderate" ? "#f59e0b" : lbl === "Low" ? "#10b981" : "#334155";
+}
 
 export default function HistoryPage() {
   const [authUser, setAuthUser] = useState(null);
@@ -58,38 +74,42 @@ export default function HistoryPage() {
     }
   }, [isAdmin]);
 
+  async function refresh() {
+    setLoading(true);
+    setErr("");
+    try {
+      if (isAdmin && pinOk) {
+        const data = await listAllPredictions(500);
+        setRows(data || []);
+      } else if (authUser) {
+        const mine = await listPredictionsByUser(authUser.uid, 200);
+        setRows(mine || []);
+      } else {
+        setRows([]);
+      }
+    } catch (e) {
+      setErr(String(e?.message || e));
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 3) Load data
   useEffect(() => {
     if (loadingAuth) return;
-    (async () => {
-      setLoading(true);
-      setErr("");
-      try {
-        if (isAdmin && pinOk) {
-          const data = await listAllPredictions(500);
-          setRows(data || []);
-        } else if (authUser) {
-          const mine = await listPredictionsByUser(authUser.uid, 100);
-          setRows(mine || []);
-        } else {
-          setRows([]);
-        }
-      } catch (e) {
-        setErr(String(e?.message || e));
-        setRows([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingAuth, isAdmin, pinOk, authUser]);
 
   const summary = useMemo(() => {
     const out = { total: rows.length, low: 0, mod: 0, high: 0 };
     rows.forEach((r) => {
-      const pred = r?.apiResponse?.results?.[0]?.pred_risk;
-      if (pred === 0) out.low++;
-      else if (pred === 1) out.mod++;
-      else if (pred === 2) out.high++;
+      const res0 = r?.apiResponse?.results?.[0] || {};
+      const lbl = labelFrom(res0.pred_risk, res0.probs);
+      if (lbl === "Low") out.low++;
+      else if (lbl === "Moderate") out.mod++;
+      else if (lbl === "High") out.high++;
     });
     return out;
   }, [rows]);
@@ -135,6 +155,41 @@ export default function HistoryPage() {
 
   async function doSignOut() {
     await signOut(auth);
+  }
+
+  async function onDelete(row) {
+    if (!authUser) return;
+    const can = authUser.uid === row.userId || authUser.uid === ADMIN_UID;
+    if (!can) return alert("Not allowed.");
+    if (!confirm("Delete this record permanently?")) return;
+    try {
+      await deletePrediction(row.userId, row.id);
+      await refresh();
+    } catch (e) {
+      alert("Delete failed: " + String(e?.message || e));
+    }
+  }
+
+  async function onEdit(row) {
+    if (!authUser) return;
+    const can = authUser.uid === row.userId || authUser.uid === ADMIN_UID;
+    if (!can) return alert("Not allowed.");
+
+    const name = prompt("Patient name:", row?.personalInfo?.name || "");
+    if (name == null) return;
+    const ageStr = prompt("Age:", String(row?.personalInfo?.age ?? ""));
+    if (ageStr == null) return;
+    const gender = prompt("Gender:", row?.personalInfo?.gender || "");
+    if (gender == null) return;
+
+    const age = Number(ageStr) || ageStr;
+    const newPI = { ...(row.personalInfo || {}), name, age, gender };
+    try {
+      await updatePrediction(row.userId, row.id, { personalInfo: newPI });
+      await refresh();
+    } catch (e) {
+      alert("Update failed: " + String(e?.message || e));
+    }
   }
 
   return (
@@ -206,11 +261,12 @@ export default function HistoryPage() {
               <tbody>
                 {rows.map((r) => {
                   const firstRow = Array.isArray(r?.rows) && r.rows.length ? r.rows[0] : {};
-                  const pred = r?.apiResponse?.results?.[0]?.pred_risk ?? null;
-                  const riskLabel = pred === 2 ? "High" : pred === 1 ? "Moderate" : pred === 0 ? "Low" : "-";
+                  const res0 = r?.apiResponse?.results?.[0] || {};
+                  const riskLabel = labelFrom(res0.pred_risk, res0.probs);
                   const when = r?.createdAtDate
                     ? r.createdAtDate
                     : (r?.createdAt?.toDate ? r.createdAt.toDate() : null);
+                  const canEdit = authUser && (authUser.uid === r.userId || authUser.uid === ADMIN_UID);
                   return (
                     <tr key={r.id}>
                       <td style={td}>{when ? when.toLocaleString() : "-"}</td>
@@ -220,9 +276,15 @@ export default function HistoryPage() {
                       <td style={td}>{firstRow?.psqi_global ?? "-"}</td>
                       <td style={{ ...td, fontWeight: 600, color: colorForRisk(riskLabel) }}>{riskLabel}</td>
                       <td style={td}>
-                        <Link href={`/patient/${r.userId || (authUser?.uid || "")}/${r.id}`} style={{ color: "#2563eb" }}>
+                        <Link href={`/patient/${r.userId || (authUser?.uid || "")}/${r.id}`} style={{ color: "#2563eb", marginRight: 10 }}>
                           View
                         </Link>
+                        {canEdit && (
+                          <>
+                            <button onClick={() => onEdit(r)} style={btnSmall}>Edit</button>
+                            <button onClick={() => onDelete(r)} style={btnSmallDanger}>Delete</button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );
@@ -245,12 +307,11 @@ function KPI({ title, value, color }) {
   );
 }
 
-function colorForRisk(r) {
-  return r === "High" ? "#ef4444" : r === "Moderate" ? "#f59e0b" : "#10b981";
-}
-
 const btn = { padding: "8px 12px", borderRadius: 8, background: "#e2e8f0", border: "none", cursor: "pointer" };
 const btnPrimary = { ...btn, background: "#2563eb", color: "#fff" };
+const btnSmall = { ...btn, padding: "6px 8px", marginRight: 6 };
+const btnSmallDanger = { ...btnSmall, background: "#fee2e2", color: "#991b1b" };
+
 const table = { width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 720 };
 const th = { textAlign: "left", padding: "10px 8px", borderBottom: "1px solid #e2e8f0" };
 const td = { padding: "8px 8px", borderBottom: "1px solid #f1f5f9" };
