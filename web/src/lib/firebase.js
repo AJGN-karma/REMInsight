@@ -7,8 +7,10 @@ import {
   addDoc,
   getDocs,
   getDoc,
+  deleteDoc,
   doc,
   setDoc,
+  updateDoc,
   query,
   orderBy,
   limit as qLimit,
@@ -171,89 +173,64 @@ export async function getMedicalFileURL(userId, uploadId) {
   return { url, mimeType, name: meta.name || "medical-report.pdf" };
 }
 
-/* -------------------------- ANALYSIS UPSERT --------------------------- */
-export function generateAnalysisId() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `aid_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+/* -------------------------- PREDICTION CRUD -------------------------- */
+function _genId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `a${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// Ensure prediction docs stay SLIM (do not put file base64 here)
+// CREATE — always new doc id (prevents silent overwrites)
+export async function createPrediction(userId, payload) {
+  const predCol = collection(doc(db, "users", userId), "predictions");
+  const id = _genId();
+  const safe = { ...payload };
+  if (safe.medicalFileBase64) delete safe.medicalFileBase64;
+
+  await setDoc(
+    doc(predCol, id),
+    {
+      ...safe,
+      id,
+      createdAt: serverTimestamp(),
+      createdAtMs: Date.now(),
+    },
+    { merge: true }
+  );
+  return { ok: true, id };
+}
+
+// UPSERT (kept for callers that pass an id, but we auto-avoid overwrites)
 export async function savePredictionRecordUpsert(userId, analysisId, payload) {
   try {
-    const safePayload = { ...payload };
-    // Hard guard: never allow large base64 on predictions
-    if (safePayload?.medicalFileBase64) delete safePayload.medicalFileBase64;
+    const predCol = collection(doc(db, "users", userId), "predictions");
+    let id = analysisId || _genId();
 
-    const ref = doc(db, "users", userId, "predictions", analysisId);
+    const maybe = await getDoc(doc(predCol, id));
+    if (maybe.exists()) {
+      id = _genId(); // avoid accidental overwrite
+    }
+
+    const safe = { ...payload };
+    if (safe.medicalFileBase64) delete safe.medicalFileBase64;
+
     await setDoc(
-      ref,
+      doc(predCol, id),
       {
-        ...safePayload,
-        id: analysisId,
+        ...safe,
+        id,
         createdAt: serverTimestamp(),
+        createdAtMs: Date.now(),
       },
       { merge: true }
     );
-    return { ok: true, id: analysisId };
+    return { ok: true, id };
   } catch (e) {
     console.error("[Firestore] upsert failed:", e);
     return { ok: false, error: String(e) };
   }
 }
 
-/* ---------------------------- MAPPERS -------------------------------- */
-function mapPredDoc(d, explicitUserId) {
-  const data = d.data();
-  const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
-  const userId = explicitUserId || (d.ref.parent?.parent ? d.ref.parent.parent.id : "");
-  return {
-    id: data.id || d.id,
-    userId,
-    ...data,
-    createdAtDate: ts,
-    createdAtISO: ts ? ts.toISOString() : "",
-  };
-}
-
-/* ----------------------- PREDICTIONS: READS --------------------------- */
-// Admin: all predictions (collectionGroup)
-export async function listAllPredictions(limitCount = 200) {
-  const cg = collectionGroup(db, "predictions");
-
-  // Try with orderBy(createdAt) first
-  try {
-    const q1 = query(cg, orderBy("createdAt", "desc"), qLimit(limitCount));
-    const snap = await getDocs(q1);
-    return snap.docs.map((d) => mapPredDoc(d));
-  } catch (e) {
-    // If index missing, fallback that needs no composite/collection-group field index
-    const q2 = query(cg, orderBy("__name__", "desc"), qLimit(limitCount));
-    const snap = await getDocs(q2);
-    // sort in JS by createdAt if available
-    return snap.docs
-      .map((d) => mapPredDoc(d))
-      .sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
-  }
-}
-
-// Per-user history
-export async function listPredictionsByUser(userId, limitCount = 50) {
-  const predCol = collection(doc(db, "users", userId), "predictions");
-  try {
-    const q1 = query(predCol, orderBy("createdAt", "desc"), qLimit(limitCount));
-    const snap = await getDocs(q1);
-    return snap.docs.map((d) => mapPredDoc(d, userId));
-  } catch (e) {
-    const q2 = query(predCol, orderBy("__name__", "desc"), qLimit(limitCount));
-    const snap = await getDocs(q2);
-    return snap.docs
-      .map((d) => mapPredDoc(d, userId))
-      .sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
-  }
-}
-
+// READ (single)
 export async function getPredictionById(userId, recordId) {
   const ref = doc(db, "users", userId, "predictions", recordId);
   const snap = await getDoc(ref);
@@ -267,6 +244,100 @@ export async function getPredictionById(userId, recordId) {
     createdAtDate: ts,
     createdAtISO: ts ? ts.toISOString() : "",
   };
+}
+
+// UPDATE
+export async function updatePrediction(userId, recordId, updates) {
+  const ref = doc(db, "users", userId, "predictions", recordId);
+  await updateDoc(ref, {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  });
+  return { ok: true };
+}
+
+// DELETE
+export async function deletePrediction(userId, recordId) {
+  const ref = doc(db, "users", userId, "predictions", recordId);
+  await deleteDoc(ref);
+  return { ok: true };
+}
+
+/* ----------------------- LISTS (+ robust fallbacks) ------------------- */
+// Admin: all predictions (collectionGroup)
+export async function listAllPredictions(limitCount = 200) {
+  const cg = collectionGroup(db, "predictions");
+  try {
+    const q1 = query(cg, orderBy("createdAt", "desc"), qLimit(limitCount));
+    const snap = await getDocs(q1);
+    return snap.docs.map((d) => {
+      const data = d.data();
+      const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+      const userId = d.ref.parent?.parent ? d.ref.parent.parent.id : "";
+      return {
+        id: data.id || d.id,
+        userId,
+        ...data,
+        createdAtDate: ts,
+        createdAtISO: ts ? ts.toISOString() : "",
+      };
+    });
+  } catch (e) {
+    // Fallback that does not need the single-field index
+    const q2 = query(cg, orderBy("__name__", "desc"), qLimit(limitCount));
+    const snap = await getDocs(q2);
+    const rows = snap.docs.map((d) => {
+      const data = d.data();
+      const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+      const userId = d.ref.parent?.parent ? d.ref.parent.parent.id : "";
+      return {
+        id: data.id || d.id,
+        userId,
+        ...data,
+        createdAtDate: ts,
+        createdAtISO: ts ? ts.toISOString() : "",
+      };
+    });
+    rows.sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
+    return rows;
+  }
+}
+
+// Per-user history
+export async function listPredictionsByUser(userId, limitCount = 50) {
+  const predCol = collection(doc(db, "users", userId), "predictions");
+  try {
+    const q1 = query(predCol, orderBy("createdAt", "desc"), qLimit(limitCount));
+    const snap = await getDocs(q1);
+    return snap.docs.map((d) => {
+      const data = d.data();
+      const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+      return {
+        id: data.id || d.id,
+        userId,
+        ...data,
+        createdAtDate: ts,
+        createdAtISO: ts ? ts.toISOString() : "",
+      };
+    });
+  } catch (e) {
+    // Fallback
+    const q2 = query(predCol, orderBy("__name__", "desc"), qLimit(limitCount));
+    const snap = await getDocs(q2);
+    const rows = snap.docs.map((d) => {
+      const data = d.data();
+      const ts = data.createdAt?.toDate ? data.createdAt.toDate() : null;
+      return {
+        id: data.id || d.id,
+        userId,
+        ...data,
+        createdAtDate: ts,
+        createdAtISO: ts ? ts.toISOString() : "",
+      };
+    });
+    rows.sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
+    return rows;
+  }
 }
 
 /* ---------------------------- CSV EXPORT ----------------------------- */
@@ -295,7 +366,7 @@ export function exportArrayToCSV(filename, rows, headerOrder) {
 export function normalizeDocForCSV(doc) {
   const firstRow = Array.isArray(doc.rows) && doc.rows.length ? doc.rows[0] : {};
   const firstRes = doc.apiResponse?.results?.[0] || {};
-  const probs = firstRes.probs || [];
+  const probs = Array.isArray(firstRes.probs) ? firstRes.probs : [];
   return {
     id: doc.id,
     userId: doc.userId || doc.personalInfo?.userId || "",
