@@ -3,15 +3,24 @@ import React, { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { auth, listPredictionsByUser } from "../../../src/lib/firebase";
+import { auth, listPredictionsByUser, updatePrediction, deletePrediction } from "../../../src/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
 const ADMIN_UID = process.env.NEXT_PUBLIC_ADMIN_UID;
 
-function riskLabel(v) { return v === 2 ? "High" : v === 1 ? "Moderate" : v === 0 ? "Low" : "-"; }
-function riskColor(label) { return label === "High" ? "#ef4444" : label === "Moderate" ? "#f59e0b" : "#10b981"; }
+function labelFrom(pred, probs) {
+  const p = Number(pred);
+  if (p === 0 || p === 1 || p === 2) return p === 2 ? "High" : p === 1 ? "Moderate" : "Low";
+  if (Array.isArray(probs) && probs.length >= 3) {
+    const max = Math.max(probs[0] || 0, probs[1] || 0, probs[2] || 0);
+    const i = [probs[0] || 0, probs[1] || 0, probs[2] || 0].indexOf(max);
+    return i === 2 ? "High" : i === 1 ? "Moderate" : "Low";
+  }
+  return "-";
+}
+function riskColor(label) { return label === "High" ? "#ef4444" : label === "Moderate" ? "#f59e0b" : label === "Low" ? "#10b981" : "#334155"; }
 
 export default function PatientHistoryPage() {
   const router = useRouter();
@@ -34,21 +43,24 @@ export default function PatientHistoryPage() {
 
   const canView = authUser && (authUser.uid === userId || authUser.uid === ADMIN_UID);
 
-  useEffect(() => {
+  async function refresh() {
     if (!userId || loadingAuth || !canView) return;
-    (async () => {
-      setLoading(true);
-      setErr("");
-      try {
-        const data = await listPredictionsByUser(String(userId), 200);
-        setRows(data || []);
-      } catch (e) {
-        setErr(String(e?.message || e));
-        setRows([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    setLoading(true);
+    setErr("");
+    try {
+      const data = await listPredictionsByUser(String(userId), 200);
+      setRows(data || []);
+    } catch (e) {
+      setErr(String(e?.message || e));
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, loadingAuth, canView]);
 
   const patient = useMemo(() => {
@@ -62,14 +74,12 @@ export default function PatientHistoryPage() {
     const pdf = new jsPDF({ unit: "pt", format: "a4" });
     const marginX = 40;
 
-    // Header
     pdf.setFontSize(16);
     pdf.text("REMInsight — Patient Full History", marginX, 40);
     pdf.setFontSize(11);
     pdf.text(`Patient User ID: ${userId}`, marginX, 60);
     pdf.text(`Records: ${rows.length}`, marginX, 76);
 
-    // Patient info overview
     pdf.setFontSize(13);
     pdf.text("Patient Information (latest)", marginX, 100);
     pdf.autoTable({
@@ -85,7 +95,6 @@ export default function PatientHistoryPage() {
       ]],
     });
 
-    // Per-visit table
     pdf.setFontSize(13);
     pdf.text("Visit History", marginX, (pdf.lastAutoTable?.finalY || 108) + 24);
 
@@ -95,7 +104,7 @@ export default function PatientHistoryPage() {
       const low = (probs[0] ?? 0).toFixed(3);
       const mod = (probs[1] ?? 0).toFixed(3);
       const high = (probs[2] ?? 0).toFixed(3);
-      return [ r.createdAtISO || "-", riskLabel(res0.pred_risk), low, mod, high, r.id ];
+      return [ r.createdAtISO || "-", labelFrom(res0.pred_risk, res0.probs), low, mod, high, r.id ];
     });
 
     pdf.autoTable({
@@ -106,6 +115,41 @@ export default function PatientHistoryPage() {
     });
 
     pdf.save(`patient_${userId}_full_history.pdf`);
+  }
+
+  async function onDelete(row) {
+    if (!authUser) return;
+    const can = authUser.uid === row.userId || authUser.uid === ADMIN_UID;
+    if (!can) return alert("Not allowed.");
+    if (!confirm("Delete this record permanently?")) return;
+    try {
+      await deletePrediction(row.userId, row.id);
+      await refresh();
+    } catch (e) {
+      alert("Delete failed: " + String(e?.message || e));
+    }
+  }
+
+  async function onEdit(row) {
+    if (!authUser) return;
+    const can = authUser.uid === row.userId || authUser.uid === ADMIN_UID;
+    if (!can) return alert("Not allowed.");
+
+    const name = prompt("Patient name:", row?.personalInfo?.name || "");
+    if (name == null) return;
+    const ageStr = prompt("Age:", String(row?.personalInfo?.age ?? ""));
+    if (ageStr == null) return;
+    const gender = prompt("Gender:", row?.personalInfo?.gender || "");
+    if (gender == null) return;
+
+    const age = Number(ageStr) || ageStr;
+    const newPI = { ...(row.personalInfo || {}), name, age, gender };
+    try {
+      await updatePrediction(row.userId, row.id, { personalInfo: newPI });
+      await refresh();
+    } catch (e) {
+      alert("Update failed: " + String(e?.message || e));
+    }
   }
 
   if (loadingAuth) {
@@ -169,10 +213,11 @@ export default function PatientHistoryPage() {
                 {rows.map((r) => {
                   const res0 = r?.apiResponse?.results?.[0] || {};
                   const probs = Array.isArray(res0?.probs) ? res0.probs : [];
-                  const rl = riskLabel(res0?.pred_risk);
+                  const rl = labelFrom(res0?.pred_risk, probs);
                   const when = r?.createdAtDate
                     ? r.createdAtDate
                     : (r?.createdAt?.toDate ? r.createdAt.toDate() : null);
+                  const canEdit = authUser && (authUser.uid === r.userId || authUser.uid === ADMIN_UID);
                   return (
                     <tr key={r.id}>
                       <td style={td}>{when ? when.toLocaleString() : "-"}</td>
@@ -181,7 +226,15 @@ export default function PatientHistoryPage() {
                       <td style={td}>{(probs[1] ?? 0).toFixed(3)}</td>
                       <td style={td}>{(probs[2] ?? 0).toFixed(3)}</td>
                       <td style={td} title={r.id}>{r.id}</td>
-                      <td style={td}><Link href={`/patient/${r.userId}/${r.id}`} style={{ color: "#2563eb" }}>View</Link></td>
+                      <td style={td}>
+                        <Link href={`/patient/${r.userId}/${r.id}`} style={{ color: "#2563eb", marginRight: 10 }}>View</Link>
+                        {canEdit && (
+                          <>
+                            <button onClick={() => onEdit(r)} style={btnSmall}>Edit</button>
+                            <button onClick={() => onDelete(r)} style={btnSmallDanger}>Delete</button>
+                          </>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -205,6 +258,8 @@ function Info({ title, value }) {
 
 const panel = { background:"#fff", border:"1px solid #e5e7eb", borderRadius:8, padding:12 };
 const btnPrimary = { padding:"8px 12px", borderRadius:8, background:"#2563eb", color:"#fff", border:"none", cursor:"pointer" };
+const btnSmall = { padding:"6px 8px", borderRadius:8, background:"#e2e8f0", border:"none", cursor:"pointer", marginRight: 6 };
+const btnSmallDanger = { ...btnSmall, background:"#fee2e2", color:"#991b1b" };
 const table = { width:"100%", borderCollapse:"collapse", fontSize:14, minWidth: 900 };
 const th = { textAlign:"left", padding:"10px 8px", borderBottom:"1px solid #e2e8f0", background:"#f8fafc" };
 const td = { padding:"8px 8px", borderBottom:"1px solid #f1f5f9" };
