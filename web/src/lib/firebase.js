@@ -179,6 +179,11 @@ function _genId() {
   return `a${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// keep backward compatibility with older code that imports generateAnalysisId
+export function generateAnalysisId() {
+  return _genId();
+}
+
 // CREATE — always new doc id (prevents silent overwrites)
 export async function createPrediction(userId, payload) {
   const predCol = collection(doc(db, "users", userId), "predictions");
@@ -298,7 +303,9 @@ export async function listAllPredictions(limitCount = 200) {
         createdAtISO: ts ? ts.toISOString() : "",
       };
     });
-    rows.sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
+    rows.sort(
+      (a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0)
+    );
     return rows;
   }
 }
@@ -335,7 +342,9 @@ export async function listPredictionsByUser(userId, limitCount = 50) {
         createdAtISO: ts ? ts.toISOString() : "",
       };
     });
-    rows.sort((a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0));
+    rows.sort(
+      (a, b) => (b.createdAtDate?.getTime() || 0) - (a.createdAtDate?.getTime() || 0)
+    );
     return rows;
   }
 }
