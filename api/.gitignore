@@ -1,0 +1,12 @@
+# Keep models folder tracked but not model files
+api/models/*
+!api/models/.gitkeep
+
+# python venv, caches
+.venv/
+__pycache__/
+*.pyc
+
+# OS / IDE
+.DS_Store
+.vscode/
