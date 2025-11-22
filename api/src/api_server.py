@@ -1,158 +1,88 @@
-# api/src/api_server.py
-from __future__ import annotations
-import json, os, sys, logging
-from pathlib import Path
-from typing import List, Any, Dict, Optional
-
-import numpy as np
-import pandas as pd
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from typing import List
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import os, json
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(name)s] %(message)s", stream=sys.stdout)
-log = logging.getLogger("reminsight-api")
+from .config import MODEL_PATH, SCALER_PATH, IMPUTER_PATH, ALLOWED_ORIGINS_LIST, MODEL_VERSION, PROVENANCE_PATH, SHAP_ENABLED, RELOAD_SECRET
 
-app = FastAPI(title="REMInsight API", version="1.0.0")
+from .infer import predict
+from .utils import load_json_safe, logger
 
-# ----- CORS (multi-origin) -----
-FRONTEND_ORIGINS_RAW = os.getenv("FRONTEND_ORIGIN", "").strip()
-if FRONTEND_ORIGINS_RAW:
-    origins = [o.strip().rstrip("/") for o in FRONTEND_ORIGINS_RAW.split(",") if o.strip()]
-    http_variants = []
-    for o in origins:
-        if o.startswith("https://"):
-            http_variants.append(o.replace("https://", "http://", 1))
-    origins += http_variants
-else:
-    origins = ["*"]
+app = FastAPI(title="REMInsight API", version=MODEL_VERSION)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    max_age=3600,
-)
+origins = ALLOWED_ORIGINS_LIST or ["*"]
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# ----- artifacts -----
-MODEL_DIR = Path(os.getenv("MODEL_DIR", "./models"))
-MODEL_PATH = MODEL_DIR / "xgb_model.joblib"
-IMP_PATH   = MODEL_DIR / "imputer.joblib"
-SCL_PATH   = MODEL_DIR / "scaler.joblib"
-FEAT_PATH  = MODEL_DIR / "features.json"
+class InputRow(BaseModel):
+    age: float
+    psqi_c1: float
+    psqi_c2: float
+    psqi_c3: float
+    psqi_c4: float
+    psqi_c5: float
+    psqi_c6: float
+    psqi_c7: float
+    TST_min: float
+    REM_total_min: float
+    REM_latency_min: float
+    REM_pct: float
+    REM_density: float
+    sleep_efficiency_pct: float
+    micro_arousals_count: float
+    mean_delta_pow: float
+    mean_theta_pow: float
+    mean_alpha_pow: float
+    mean_beta_pow: float
+    artifact_pct: float
+    percent_epochs_missing: float
+    psqi_global: float
+    rem_to_tst_ratio: float
+    rem_latency_ratio: float
 
-_model = _imputer = _scaler = None
-_features: Optional[List[str]] = None
-_model_error: Optional[str] = None
-
-def _try_load():
-    global _model, _imputer, _scaler, _features, _model_error
-    if _model is not None and _imputer is not None and _scaler is not None and _features is not None:
-        return
-    try:
-        from joblib import load
-        log.info("Loading artifacts from %s", MODEL_DIR.resolve())
-        _features = json.loads(FEAT_PATH.read_text(encoding="utf-8"))
-        _imputer = load(IMP_PATH)
-        _scaler  = load(SCL_PATH)
-        _model   = load(MODEL_PATH)
-        _model_error = None
-        log.info("Artifacts loaded: features=%d", len(_features))
-    except Exception as e:
-        _model = _imputer = _scaler = None
-        try:
-            _features = _features or json.loads(FEAT_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            _features = _features or []
-        _model_error = f"{type(e).__name__}: {e}"
-        log.error("Model load failed: %s", _model_error)
-
-# ----- schemas -----
 class PredictRequest(BaseModel):
-    rows: List[Dict[str, Any]]
-
-class PredictResponseRow(BaseModel):
-    pred_risk: int
-    probs: List[float]
-    row_index: Optional[int] = None
-
-class PredictResponse(BaseModel):
-    results: List[PredictResponseRow]
-    features_used: List[str]
-    coverage_ratio: float
-    missing_columns: List[str] = []
-    extra_columns: List[str] = []
-    warning: Optional[str] = None
-
-# ----- routes -----
-@app.get("/__ping")
-def ping():
-    return {"ok": True}
+    rows: List[InputRow] = Field(..., min_items=1)
 
 @app.get("/health")
 def health():
-    _try_load()
-    return {
-        "status": "ok" if _model_error is None else "degraded",
-        "model_loaded": _model is not None,
-        "features": len(_features or []),
-        "error": _model_error,
-        "origins": FRONTEND_ORIGINS_RAW or "*",
-    }
+    prov = load_json_safe(PROVENANCE_PATH)
+    model_loaded = os.path.exists(MODEL_PATH)
+    return {"status":"ok","model_loaded":model_loaded,"model_version":MODEL_VERSION,"training_provenance":prov}
 
 @app.get("/features")
-def get_features():
-    _try_load()
-    return {"features": _features or []}
-
-@app.get("/sample_row")
-def sample_row():
-    _try_load()
-    return {name: None for name in (_features or [])}
-
-@app.post("/predict", response_model=PredictResponse)
-def predict(req: PredictRequest):
-    _try_load()
-    if _model is None or _imputer is None or _scaler is None:
-        raise HTTPException(status_code=503, detail=f"Model not available: {_model_error}")
-
-    if not req.rows:
-        return PredictResponse(
-            results=[], features_used=_features or [], coverage_ratio=0.0,
-            missing_columns=[], extra_columns=[], warning="No rows provided"
-        )
-
-    df = pd.DataFrame(req.rows)
-    feats = _features or []
-    missing = [c for c in feats if c not in df.columns]
-    extra   = [c for c in df.columns if c not in feats]
-    coverage = (len(feats) - len(missing)) / max(1, len(feats))
-
-    X = df.reindex(columns=feats, fill_value=np.nan).values
+def features():
     try:
-        X_imp = _imputer.transform(X)
-        X_scl = _scaler.transform(X_imp)
-        probs = _model.predict_proba(X_scl)
+        with open("api/models/features.json") as f:
+            feats = json.load(f)
+    except Exception:
+        feats = []
+    return {"features": feats, "model_version": MODEL_VERSION}
+
+@app.post("/predict")
+def api_predict(req: PredictRequest):
+    rows = [r.dict() for r in req.rows]
+    try:
+        preds, probs = predict(rows, MODEL_PATH, IMPUTER_PATH, SCALER_PATH, "api/models/features.json")
     except Exception as e:
-        log.exception("Prediction pipeline failed")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {type(e).__name__}: {e}")
+        logger.exception("predict error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"predictions": preds, "probabilities": probs, "model_version": MODEL_VERSION}
 
-    preds = probs.argmax(axis=1)
-    results = [
-        PredictResponseRow(pred_risk=int(preds[i]),
-                           probs=[float(x) for x in probs[i]],
-                           row_index=int(i))
-        for i in range(len(df))
-    ]
+@app.post("/_reload")
+def reload(secret: str = ""):
+    if RELOAD_SECRET and secret != RELOAD_SECRET:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return {"reloaded": True}
 
-    warn = f"Missing {len(missing)} features: {missing[:5]}..." if missing else None
-    return PredictResponse(
-        results=results,
-        features_used=feats,
-        coverage_ratio=float(coverage),
-        missing_columns=missing,
-        extra_columns=extra,
-        warning=warn
-    )
+if SHAP_ENABLED:
+    from .shap_explain import explain_rows
+    @app.post("/explain")
+    def api_explain(req: PredictRequest):
+        rows = [r.dict() for r in req.rows]
+        import numpy as np
+        from .transformers import load_features, load_joblib_safe
+        feats = load_features("api/models/features.json")
+        model = load_joblib_safe(MODEL_PATH)
+        X = np.array([[float(r.get(f, 0.0)) for f in feats] for r in rows], dtype=float)
+        exp = explain_rows(model, X, feats, top_k=5)
+        return {"explanations": exp}
