@@ -1,249 +1,234 @@
-from __future__ import annotations
-
-import argparse
-import json
-import os
+# api/src/train.py
+"""
+Training pipeline (XGBoost-only). Produces artifacts in api/models/
+Run: python api/src/train.py --config api/configs/train_config.yaml
+"""
+import argparse, json, time, os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from collections import defaultdict, Counter
 
 import numpy as np
 import pandas as pd
+import joblib
 import yaml
-from joblib import dump
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
 from sklearn.preprocessing import StandardScaler
-from xgboost import XGBClassifier
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
+import xgboost as xgb
 
-# >>> Our data helpers (you already created src/data_utils.py)
-from src.data_utils import (
-    load_csv,
-    ensure_psqi_global,
-    validate_schema,
-    feature_engineer,
-)
+try:
+    import optuna
+    OPTUNA = True
+except Exception:
+    OPTUNA = False
 
-RNG_SEED = 42
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except Exception:
+    SHAP_AVAILABLE = False
 
+from .data_utils import read_csv, validate_columns
+from .feature_engineering import ensure_derived
 
-def load_config(path: Optional[str]) -> Dict[str, Any]:
-    """Load YAML config if provided; otherwise return defaults."""
-    default = {
-        "model": {
-            "n_estimators": 300,
-            "max_depth": 6,
-            "learning_rate": 0.05,
-            "subsample": 0.9,
-            "colsample_bytree": 0.9,
-            "reg_lambda": 1.0,
-            "reg_alpha": 0.0,
-            "tree_method": "hist",  # fast
-            "random_state": RNG_SEED,
-        }
+def read_config(path):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+def ensure_dir(path):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+def subjectwise_split(subject_ids, labels, test_size=0.15, val_size=0.15, seed=42):
+    subj_to_labels = defaultdict(list)
+    for s,l in zip(subject_ids, labels):
+        subj_to_labels[s].append(l)
+    unique_subjects = list(subj_to_labels.keys())
+    subj_label_mode = [Counter(subj_to_labels[s]).most_common(1)[0][0] for s in unique_subjects]
+
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=seed)
+    subj_idx = list(range(len(unique_subjects)))
+    train_temp_subj_idx, test_subj_idx = next(sss.split(subj_idx, subj_label_mode))
+
+    train_temp_subjects = [unique_subjects[i] for i in train_temp_subj_idx]
+    train_temp_labels = [subj_label_mode[i] for i in train_temp_subj_idx]
+
+    sss2 = StratifiedShuffleSplit(n_splits=1, test_size=val_size/(1-test_size), random_state=seed)
+    train_subj_idx, val_subj_idx = next(sss2.split(list(range(len(train_temp_subjects))), train_temp_labels))
+
+    train_subjects = set(train_temp_subjects[i] for i in train_subj_idx)
+    val_subjects = set(train_temp_subjects[i] for i in val_subj_idx)
+    test_subjects = set(unique_subjects[i] for i in test_subj_idx)
+
+    train_idx = [i for i,s in enumerate(subject_ids) if s in train_subjects]
+    val_idx = [i for i,s in enumerate(subject_ids) if s in val_subjects]
+    test_idx = [i for i,s in enumerate(subject_ids) if s in test_subjects]
+    return {"train_idx": train_idx, "val_idx": val_idx, "test_idx": test_idx}
+
+def compute_metrics(y_true, y_pred, y_proba=None):
+    res = {}
+    res["accuracy"] = float(accuracy_score(y_true, y_pred))
+    res["precision"] = float(precision_score(y_true, y_pred, average="macro", zero_division=0))
+    res["recall"] = float(recall_score(y_true, y_pred, average="macro", zero_division=0))
+    res["f1_score"] = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
+    if y_proba is not None:
+        try:
+            res["roc_auc_ovr"] = float(roc_auc_score(pd.get_dummies(y_true), y_proba, average="macro", multi_class="ovr"))
+        except Exception:
+            res["roc_auc_ovr"] = None
+    res["confusion_matrix"] = confusion_matrix(y_true, y_pred).tolist()
+    return res
+
+def train_xgb(X_train, y_train, X_val, y_val, params, early_stopping):
+    model = xgb.XGBClassifier(**params, use_label_encoder=False, eval_metric="mlogloss")
+    model.fit(X_train, y_train, eval_set=[(X_train,y_train),(X_val,y_val)], early_stopping_rounds=early_stopping, verbose=False)
+    return model
+
+def objective_optuna(trial, X, y, cfg):
+    param = {
+        "max_depth": trial.suggest_int("max_depth", 3, 10),
+        "learning_rate": trial.suggest_loguniform("learning_rate", 0.01, 0.2),
+        "n_estimators": trial.suggest_int("n_estimators", 100, 800),
+        "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 1.0),
+        "reg_lambda": trial.suggest_float("reg_lambda", 0.0, 5.0),
+        "random_state": cfg.get("seed",42),
+        "objective": "multi:softprob",
+        "num_class": cfg["xgb_params"]["num_class"],
+        "tree_method": "hist"
     }
-    if not path:
-        return default
-    with open(path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
-    # shallow-merge
-    if "model" in cfg:
-        default["model"].update(cfg["model"] or {})
-    return default
+    skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=cfg.get("seed",42))
+    aucs = []
+    for tr,va in skf.split(X,y):
+        clf = xgb.XGBClassifier(**param, use_label_encoder=False, eval_metric="mlogloss")
+        clf.fit(X[tr], y[tr], eval_set=[(X[tr],y[tr]), (X[va], y[va])], early_stopping_rounds=cfg.get("early_stopping_rounds",30), verbose=False)
+        proba = clf.predict_proba(X[va])
+        try:
+            auc = roc_auc_score(pd.get_dummies(y[va]), proba, average="macro", multi_class="ovr")
+        except Exception:
+            auc = 0.0
+        aucs.append(auc)
+    return float(np.mean(aucs))
 
+def main(cfg_path):
+    t0 = time.time()
+    cfg = read_config(cfg_path)
+    train_csv = cfg["data_paths"]["train_csv"]
+    val_csv = cfg["data_paths"]["val_csv"]
+    model_out = cfg["data_paths"]["model_out"]
+    scaler_out = cfg["data_paths"]["scaler_out"]
+    imputer_out = cfg["data_paths"]["imputer_out"]
+    features_out = cfg["data_paths"]["features_out"]
+    summary_out = cfg["data_paths"]["training_summary_out"]
+    eval_out = cfg["data_paths"]["evaluation_report_out"]
 
-def build_model(model_cfg: Dict[str, Any]) -> XGBClassifier:
-    """Create an XGBClassifier for 3-class risk classification (0/1/2)."""
-    return XGBClassifier(
-        n_estimators=model_cfg.get("n_estimators", 300),
-        max_depth=model_cfg.get("max_depth", 6),
-        learning_rate=model_cfg.get("learning_rate", 0.05),
-        subsample=model_cfg.get("subsample", 0.9),
-        colsample_bytree=model_cfg.get("colsample_bytree", 0.9),
-        reg_lambda=model_cfg.get("reg_lambda", 1.0),
-        reg_alpha=model_cfg.get("reg_alpha", 0.0),
-        tree_method=model_cfg.get("tree_method", "hist"),
-        objective="multi:softprob",   # multiclass probabilities
-        num_class=3,
-        random_state=model_cfg.get("random_state", RNG_SEED),
-        n_jobs=0,
-    )
+    df_train = read_csv(train_csv)
+    df_val = read_csv(val_csv)
 
+    # Validate columns
+    validate_columns(df_train, cfg["required_columns"])
+    validate_columns(df_val, cfg["required_columns"])
 
-def prepare_frame(path: str) -> tuple[pd.DataFrame, list[str]]:
-    """
-    READ + ENSURE + VALIDATE + FEATURE ENGINEER
-    This returns a ready-to-use DataFrame and the model feature list.
+    # Combine for consistent preprocessing
+    df_all = pd.concat([df_train, df_val], ignore_index=True)
+    df_all = ensure_derived(df_all)
+    features = cfg["feature_columns"]
+    # Save features
+    ensure_dir(features_out)
+    with open(features_out, "w") as f:
+        json.dump(features, f, indent=2)
 
-    IMPORTANT: This is the block that was previously described in “replace your reads” and
-    “call feature engineering”. It’s now consolidated here.
-    """
-    # (1) Load CSV with normalized headers
-    df_raw = load_csv(path)
+    X_all = df_all[features].values.astype(float)
+    y_all = df_all[cfg["target"]].values
+    subj_all = df_all[cfg.get("subject_id_col","subject_id")].values
 
-    # (2) Ensure psqi_global exists (derive from psqi_c1..psqi_c7 if missing)
-    df_raw = ensure_psqi_global(df_raw)
+    splits = subjectwise_split(subj_all, y_all, test_size=cfg.get("test_size",0.15), val_size=cfg.get("val_size",0.15), seed=cfg.get("seed",42))
+    train_idx, val_idx, test_idx = splits["train_idx"], splits["val_idx"], splits["test_idx"]
 
-    # (3) Validate schema + ranges. Keep the returned frame!
-    df_val = validate_schema(df_raw, required_columns=None)
+    X_train, y_train = X_all[train_idx], y_all[train_idx]
+    X_val, y_val = X_all[val_idx], y_all[val_idx]
+    X_test, y_test = X_all[test_idx], y_all[test_idx]
 
-    # (4) Add derived features + get the feature list used for ML
-    df_fe, feat_list = feature_engineer(df_val)
-
-    return df_fe, feat_list
-
-
-def make_Xy(df: pd.DataFrame, features: list[str]):
-    """
-    Build X (features) and y (labels) numpy arrays.
-    NOTE: This is where we “create X/y”.
-    """
-    X = df[features].values
-    y = df["label_risk"].astype(int).values
-    return X, y
-
-
-def impute_and_scale(train_X: np.ndarray, val_X: Optional[np.ndarray]):
-    """Fit imputer+scaler on train, transform both."""
+    # Imputer & scaler (fit on train only)
     imputer = SimpleImputer(strategy="median")
+    X_train = imputer.fit_transform(X_train)
+    X_val = imputer.transform(X_val)
+    X_test = imputer.transform(X_test)
+
     scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_val = scaler.transform(X_val)
+    X_test = scaler.transform(X_test)
 
-    train_X_imp = imputer.fit_transform(train_X)
-    train_X_scl = scaler.fit_transform(train_X_imp)
+    tuned = cfg.get("xgb_params", {}).copy()
+    if cfg.get("use_optuna", True) and OPTUNA:
+        study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=cfg.get("seed",42)))
+        study.optimize(lambda t: objective_optuna(t, X_train, y_train, cfg), n_trials=cfg.get("optuna_trials",20))
+        best = study.best_params
+        tuned.update({
+            "max_depth": best["max_depth"],
+            "learning_rate": best["learning_rate"],
+            "n_estimators": int(best["n_estimators"]),
+            "subsample": best["subsample"],
+            "colsample_bytree": best["colsample_bytree"],
+            "reg_alpha": float(best["reg_alpha"]),
+            "reg_lambda": float(best["reg_lambda"]),
+            "tree_method": "hist",
+            "random_state": cfg.get("seed",42),
+            "objective": "multi:softprob",
+            "num_class": cfg["xgb_params"]["num_class"],
+        })
+    else:
+        tuned.update(cfg.get("xgb_params", {}))
 
-    val_X_scl = None
-    if val_X is not None:
-        val_X_imp = imputer.transform(val_X)
-        val_X_scl = scaler.transform(val_X_imp)
+    model = train_xgb(X_train, y_train, X_val, y_val, tuned, cfg.get("early_stopping_rounds",30))
 
-    return train_X_scl, val_X_scl, imputer, scaler
+    # Evaluate
+    ytr_pred = model.predict(X_train)
+    ytr_proba = model.predict_proba(X_train)
+    yv_pred = model.predict(X_val)
+    yv_proba = model.predict_proba(X_val)
+    yt_pred = model.predict(X_test)
+    yt_proba = model.predict_proba(X_test)
 
-
-def evaluate(y_true: np.ndarray, y_pred: np.ndarray, y_prob: Optional[np.ndarray] = None) -> Dict[str, Any]:
-    """Compute key metrics for reporting."""
-    out = {
-        "accuracy": float(accuracy_score(y_true, y_pred)),
-        "f1_macro": float(f1_score(y_true, y_pred, average="macro")),
-        "confusion_matrix": confusion_matrix(y_true, y_pred).tolist(),
-        "classification_report": classification_report(y_true, y_pred, output_dict=True),
+    metrics = {
+        "train": compute_metrics(y_train, ytr_pred, ytr_proba),
+        "val": compute_metrics(y_val, yv_pred, yv_proba),
+        "test": compute_metrics(y_test, yt_pred, yt_proba),
+        "counts": {"total": len(df_all), "train": len(train_idx), "val": len(val_idx), "test": len(test_idx)},
+        "feature_count": len(features),
+        "duration_seconds": int(time.time()-t0)
     }
-    if y_prob is not None:
-        # you can add more prob-based metrics later (e.g., AUC per class)
-        pass
-    return out
 
+    # Save artifacts
+    joblib.dump(model, model_out)
+    joblib.dump(scaler, scaler_out)
+    joblib.dump(imputer, imputer_out)
+    with open(summary_out, "w") as f:
+        json.dump({"config": cfg, "metrics": metrics}, f, indent=2)
+    with open(eval_out, "w") as f:
+        json.dump(metrics, f, indent=2)
 
-def save_artifacts(out_dir: Path,
-                   model: XGBClassifier,
-                   imputer: SimpleImputer,
-                   scaler: StandardScaler,
-                   features: list[str],
-                   train_report: Dict[str, Any],
-                   val_report: Optional[Dict[str, Any]]):
-    """Save model, preprocessing, features, and reports to disk."""
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if SHAP_AVAILABLE:
+        try:
+            expl = shap.TreeExplainer(model)
+            n = min(200, X_test.shape[0])
+            idx = np.random.RandomState(cfg.get("seed",42)).choice(range(X_test.shape[0]), size=n, replace=False)
+            Xs = X_test[idx]
+            leaf_shap = expl.shap_values(Xs)
+            mean_abs = np.mean(np.abs(leaf_shap), axis=(0,1)) if isinstance(leaf_shap, list) else np.mean(np.abs(leaf_shap), axis=0)
+            feat_imp = sorted(list(zip(features, mean_abs.tolist())), key=lambda x:x[1], reverse=True)
+            with open(Path(model_out).parent.joinpath("shap_feature_importance.json"), "w") as f:
+                json.dump(feat_imp, f, indent=2)
+        except Exception as e:
+            print("shap error:", e)
 
-    dump(model, out_dir / "xgb_model.joblib")
-    dump(imputer, out_dir / "imputer.joblib")
-    dump(scaler, out_dir / "scaler.joblib")
-
-    (out_dir / "features.json").write_text(json.dumps(features, indent=2))
-
-    all_reports = {"train": train_report}
-    if val_report is not None:
-        all_reports["val"] = val_report
-    (out_dir / "evaluation_report.json").write_text(json.dumps(all_reports, indent=2))
-
-    # simple training summary
-    (out_dir / "training_summary.json").write_text(json.dumps({
-        "model_type": "XGBClassifier",
-        "artifacts": {
-            "model": "xgb_model.joblib",
-            "imputer": "imputer.joblib",
-            "scaler": "scaler.joblib",
-            "features": "features.json",
-            "evaluation_report": "evaluation_report.json",
-        }
-    }, indent=2))
-
-    print(f"[OK] Saved artifacts to: {out_dir.resolve()}")
-
-
-def train_main():
-    parser = argparse.ArgumentParser(description="Train REMInsight classifier")
-    parser.add_argument("--config", type=str, default=None, help="YAML config file")
-    parser.add_argument("--data", type=str, required=True, help="Training CSV")
-    parser.add_argument("--val", type=str, default=None, help="External validation CSV (optional but recommended)")
-    parser.add_argument("--out", type=str, required=True, help="Directory to save model artifacts")
-    args = parser.parse_args()
-
-    cfg = load_config(args.config)
-    model_cfg = cfg["model"]
-
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # -----------------------------
-    #   TRAIN PREP
-    # -----------------------------
-    print("[INFO] Loading + preparing TRAIN data...")
-    df_train_fe, feat_list = prepare_frame(args.data)
-    X_train, y_train = make_Xy(df_train_fe, feat_list)
-
-    # -----------------------------
-    #   VAL PREP (optional)
-    # -----------------------------
-    X_val = y_val = df_val_fe = None
-    if args.val:
-        print("[INFO] Loading + preparing VAL data...")
-        df_val_fe, _ = prepare_frame(args.val)
-        # Important: align columns to training feature list to avoid shape mismatch
-        df_val_fe = df_val_fe.reindex(columns=feat_list + [c for c in df_val_fe.columns if c not in feat_list])
-        X_val, y_val = make_Xy(df_val_fe, feat_list)
-
-    # -----------------------------
-    #   PREPROCESS (impute + scale)
-    # -----------------------------
-    X_train_scl, X_val_scl, imputer, scaler = impute_and_scale(X_train, X_val)
-
-    # -----------------------------
-    #   MODEL
-    # -----------------------------
-    print("[INFO] Building model...")
-    model = build_model(model_cfg)
-
-    print("[INFO] Training model...")
-    model.fit(X_train_scl, y_train)
-
-    # -----------------------------
-    #   EVALUATION
-    # -----------------------------
-    print("[INFO] Evaluating on TRAIN...")
-    train_pred = model.predict(X_train_scl)
-    train_prob = model.predict_proba(X_train_scl)
-    train_report = evaluate(y_train, train_pred, train_prob)
-    print(f"  Train acc={train_report['accuracy']:.3f}  f1_macro={train_report['f1_macro']:.3f}")
-
-    val_report = None
-    if X_val_scl is not None:
-        print("[INFO] Evaluating on VAL...")
-        val_pred = model.predict(X_val_scl)
-        val_prob = model.predict_proba(X_val_scl)
-        val_report = evaluate(y_val, val_pred, val_prob)
-        print(f"  Val   acc={val_report['accuracy']:.3f}  f1_macro={val_report['f1_macro']:.3f}")
-
-    # -----------------------------
-    #   SAVE
-    # -----------------------------
-    save_artifacts(
-        out_dir=out_dir,
-        model=model,
-        imputer=imputer,
-        scaler=scaler,
-        features=feat_list,
-        train_report=train_report,
-        val_report=val_report,
-    )
-
+    print("Training complete. Artifacts saved.")
+    print(json.dumps(metrics, indent=2))
 
 if __name__ == "__main__":
-    train_main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default="../configs/train_config.yaml")
+    args = parser.parse_args()
+    main(args.config)
