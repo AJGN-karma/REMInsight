@@ -1,9 +1,7 @@
 seed: 42
-
 target: label_risk
 subject_id_col: subject_id
 
-# Columns that must exist in the CSV
 required_columns:
   - recording_id
   - subject_id
@@ -33,7 +31,6 @@ required_columns:
   - rem_latency_ratio
   - label_risk
 
-# Features actually sent to the model (these must match API InputRow exactly)
 feature_columns:
   - age
   - psqi_c1
@@ -86,11 +83,9 @@ numeric_features:
   - rem_to_tst_ratio
   - rem_latency_ratio
 
-# No categorical & no derived features in this final API model
 categorical_features: []
 derived_features: []
 
-# XGBoost parameters (final)
 xgb_params:
   objective: "multi:softprob"
   num_class: 3
@@ -105,8 +100,6 @@ xgb_params:
   random_state: 42
 
 early_stopping_rounds: 30
-
-# Data split settings (subject-wise split must be in your train.py)
 test_size: 0.15
 val_size: 0.15
 
@@ -119,3 +112,6 @@ data_paths:
   imputer_out: api/models/imputer.joblib
   training_summary_out: api/models/training_summary.json
   evaluation_report_out: api/models/evaluation_report.json
+
+use_optuna: true
+optuna_trials: 20
