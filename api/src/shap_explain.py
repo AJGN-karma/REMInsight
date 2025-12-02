@@ -1,24 +1,15 @@
-from functools import lru_cache
+import shap
 import numpy as np
 
-@lru_cache(maxsize=1)
-def get_explainer(model):
-    import shap
-    try:
-        return shap.TreeExplainer(model)
-    except Exception:
-        try:
-            return shap.TreeExplainer(model.get_booster())
-        except Exception as e:
-            raise RuntimeError("Failed to init SHAP") from e
-
-def explain_rows(model, X, feature_names, top_k=5):
-    expl = get_explainer(model)
-    shap_values = expl.shap_values(X)
-    out = []
-    for i in range(len(X)):
-        sv = shap_values[i]
-        idx = np.argsort(np.abs(sv))[-top_k:][::-1]
-        feats = [{"feature": feature_names[j], "shap": float(sv[j])} for j in idx]
-        out.append(feats)
-    return out
+def explain_rows(model, X, feats, top_k=5):
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+    if isinstance(shap_values, list):
+        arr = shap_values[1] if len(shap_values) > 1 else shap_values[0]
+    else:
+        arr = shap_values
+    rows = []
+    for row in arr:
+        idx = np.argsort(np.abs(row))[::-1][:top_k]
+        rows.append([{ "feature": feats[i], "shap": float(row[i]) } for i in idx])
+    return rows
