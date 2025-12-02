@@ -1,17 +1,15 @@
-import pandas as pd
+import json
 from pathlib import Path
-from .utils import logger
 
-def read_csv(path):
+def load_json_safe(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_json_safe(path, data):
     p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"{path} not found")
-    df = pd.read_csv(str(p))
-    return df
-
-def validate_columns(df, required):
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        logger.error("Missing columns: %s", missing)
-        raise ValueError(f"Missing required columns: {missing}")
-    return True
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w") as f:
+        json.dump(data, f, indent=2)
