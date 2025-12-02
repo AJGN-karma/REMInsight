@@ -1,117 +1,50 @@
 seed: 42
-target: label_risk
-subject_id_col: subject_id
 
-required_columns:
-  - recording_id
-  - subject_id
-  - age
-  - psqi_c1
-  - psqi_c2
-  - psqi_c3
-  - psqi_c4
-  - psqi_c5
-  - psqi_c6
-  - psqi_c7
-  - psqi_global
-  - TST_min
-  - REM_total_min
-  - REM_latency_min
-  - REM_pct
-  - REM_density
-  - sleep_efficiency_pct
-  - micro_arousals_count
-  - mean_delta_pow
-  - mean_theta_pow
-  - mean_alpha_pow
-  - mean_beta_pow
-  - artifact_pct
-  - percent_epochs_missing
-  - rem_to_tst_ratio
-  - rem_latency_ratio
-  - label_risk
+data:
+  train_csv: ../data/night_summary.csv
+  val_csv: ../data/night_summary_validation.csv
+  raw_dir: ../data/raw
 
-feature_columns:
-  - age
-  - psqi_c1
-  - psqi_c2
-  - psqi_c3
-  - psqi_c4
-  - psqi_c5
-  - psqi_c6
-  - psqi_c7
-  - psqi_global
-  - TST_min
-  - REM_total_min
-  - REM_latency_min
-  - REM_pct
-  - REM_density
-  - sleep_efficiency_pct
-  - micro_arousals_count
-  - mean_delta_pow
-  - mean_theta_pow
-  - mean_alpha_pow
-  - mean_beta_pow
-  - artifact_pct
-  - percent_epochs_missing
-  - rem_to_tst_ratio
-  - rem_latency_ratio
+artifacts:
+  base_dir: ../models
+  version_prefix: v
+  timestamp_format: "%Y%m%dT%H%M%S"
 
-numeric_features:
-  - age
-  - psqi_c1
-  - psqi_c2
-  - psqi_c3
-  - psqi_c4
-  - psqi_c5
-  - psqi_c6
-  - psqi_c7
-  - psqi_global
-  - TST_min
-  - REM_total_min
-  - REM_latency_min
-  - REM_pct
-  - REM_density
-  - sleep_efficiency_pct
-  - micro_arousals_count
-  - mean_delta_pow
-  - mean_theta_pow
-  - mean_alpha_pow
-  - mean_beta_pow
-  - artifact_pct
-  - percent_epochs_missing
-  - rem_to_tst_ratio
-  - rem_latency_ratio
+preprocessing:
+  imputation: median        # accepted values: median, knn
+  knn_neighbors: 5
+  outlier_removal: iqr      # accepted: none, iqr, zscore
+  iqr_multiplier: 1.5
+  zscore_threshold: 4.0
 
-categorical_features: []
-derived_features: []
+feature_engineering:
+  rolling_windows: [3,5]
+  poly_degree: 0
+  add_interactions: true
 
-xgb_params:
-  objective: "multi:softprob"
-  num_class: 3
-  learning_rate: 0.05
-  max_depth: 5
-  n_estimators: 500
-  subsample: 0.9
-  colsample_bytree: 0.9
-  reg_alpha: 0.0
-  reg_lambda: 1.0
-  tree_method: "hist"
-  random_state: 42
+training:
+  model_type: xgboost
+  n_splits: 5
+  early_stopping_rounds: 50
+  n_jobs: -1
+  use_optuna: true
+  optuna:
+    n_trials: 50
+    timeout: 3600
+    direction: maximize
+  default_params:
+    objective: binary:logistic
+    eval_metric: auc
+    use_label_encoder: false
+    seed: 42
+    n_estimators: 500
+    learning_rate: 0.05
+    max_depth: 6
+    subsample: 0.8
+    colsample_bytree: 0.8
+    reg_alpha: 0.0
+    reg_lambda: 1.0
+    scale_pos_weight: null
 
-early_stopping_rounds: 30
-test_size: 0.15
-val_size: 0.15
-
-data_paths:
-  train_csv: api/data/night_summary_balanced.csv
-  val_csv: api/data/night_summary_imbalanced.csv
-  features_out: api/models/features.json
-  model_out: api/models/xgb_model.joblib
-  scaler_out: api/models/scaler.joblib
-  imputer_out: api/models/imputer.joblib
-  training_summary_out: api/models/training_summary.json
-  evaluation_report_out: api/models/evaluation_report.json
-
-use_optuna: true
-optuna_trials: 20
+logging:
+  level: INFO
