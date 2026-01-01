@@ -25,7 +25,7 @@ function friendlySummary(predRisk, avgProb, psqiGlobal) {
     hints.push("Keep healthy habits (consistent routine, light exposure, exercise).");
   }
 
-  const conf = p != null ? ` Model confidence for ${riskLabel}: ${(p*100).toFixed(1)}%.` : "";
+  const conf = p != null ? ` The Analyze shows  ${riskLabel}: ${(p*100).toFixed(1)}%.` : "";
   return { riskLabel, text: msg + conf, hints };
 }
 
