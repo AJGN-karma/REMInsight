@@ -312,17 +312,14 @@
   <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
  </head>
  <body class="h-full" style="background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;overflow-x:hidden;margin:0;">
-  <div id="app-root" class="w-full overflow-auto" style="background:var(--bg);height:100%;display:flex;flex-direction:column;">
-   <!-- Floating ambient orbs -->
+  <div id="app-root" class="w-full overflow-auto" style="background:var(--bg);height:100%;display:flex;flex-direction:column;"><!-- Floating ambient orbs -->
    <div style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden;">
     <div style="position:absolute;top:10%;left:5%;width:300px;height:300px;background:radial-gradient(circle,rgba(99,102,241,0.12),transparent 70%);border-radius:50%;animation:float 8s ease-in-out infinite;"></div>
     <div style="position:absolute;top:40%;right:5%;width:250px;height:250px;background:radial-gradient(circle,rgba(34,211,238,0.1),transparent 70%);border-radius:50%;animation:floatReverse 10s ease-in-out infinite;"></div>
     <div style="position:absolute;bottom:20%;left:30%;width:200px;height:200px;background:radial-gradient(circle,rgba(167,139,250,0.08),transparent 70%);border-radius:50%;animation:float 12s ease-in-out infinite;"></div>
    </div>
-   <div style="position:relative;z-index:1;max-width:960px;margin:0 auto;padding:2rem 1.5rem;">
-    <!-- HERO SECTION -->
-    <header class="anim-up" style="text-align:center;padding:3rem 0 2rem;">
-     <!-- Animated brain/neural graphic -->
+   <div style="position:relative;z-index:1;max-width:960px;margin:0 auto;padding:2rem 1.5rem;"><!-- HERO SECTION -->
+    <header class="anim-up" style="text-align:center;padding:3rem 0 2rem;"><!-- Animated brain/neural graphic -->
      <div style="position:relative;width:200px;height:200px;margin:0 auto 2rem;">
       <div style="position:absolute;inset:0;border-radius:50%;border:2px solid rgba(99,102,241,0.2);animation:pulse-glow 3s ease-in-out infinite;"></div>
       <div style="position:absolute;inset:15px;border-radius:50%;border:2px dashed rgba(34,211,238,0.2);animation:pulse-glow 3s ease-in-out infinite 0.5s;"></div>
@@ -333,43 +330,35 @@
        <div style="position:absolute;width:5px;height:5px;background:#a78bfa;border-radius:50%;box-shadow:0 0 10px #a78bfa;animation:orbit3 10s linear infinite;"></div>
       </div><!-- center icon -->
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
-       <svg width="64" height="64" viewbox="0 0 64 64" fill="none">
-        <path d="M32 8C18.7 8 8 18.7 8 32s10.7 24 24 24 24-10.7 24-24S45.3 8 32 8z" stroke="#6366f1" stroke-width="1.5" fill="none" opacity="0.5" /> <path d="M20 30c0-6.6 5.4-12 12-12s12 5.4 12 12" stroke="#22d3ee" stroke-width="2" fill="none" stroke-linecap="round" /> <path d="M22 36c2 4 6 7 10 7s8-3 10-7" stroke="#a78bfa" stroke-width="2" fill="none" stroke-linecap="round" /> <circle cx="28" cy="28" r="2" fill="#22d3ee" /> <circle cx="36" cy="28" r="2" fill="#6366f1" /> <circle cx="32" cy="34" r="2" fill="#a78bfa" /> <line x1="28" y1="28" x2="36" y2="28" stroke="#6366f1" stroke-width="0.8" opacity="0.5" /> <line x1="28" y1="28" x2="32" y2="34" stroke="#22d3ee" stroke-width="0.8" opacity="0.5" /> <line x1="36" y1="28" x2="32" y2="34" stroke="#a78bfa" stroke-width="0.8" opacity="0.5" />
+       <svg width="64" height="64" viewbox="0 0 64 64" fill="none"><path d="M32 8C18.7 8 8 18.7 8 32s10.7 24 24 24 24-10.7 24-24S45.3 8 32 8z" stroke="#6366f1" stroke-width="1.5" fill="none" opacity="0.5" /> <path d="M20 30c0-6.6 5.4-12 12-12s12 5.4 12 12" stroke="#22d3ee" stroke-width="2" fill="none" stroke-linecap="round" /> <path d="M22 36c2 4 6 7 10 7s8-3 10-7" stroke="#a78bfa" stroke-width="2" fill="none" stroke-linecap="round" /> <circle cx="28" cy="28" r="2" fill="#22d3ee" /> <circle cx="36" cy="28" r="2" fill="#6366f1" /> <circle cx="32" cy="34" r="2" fill="#a78bfa" /> <line x1="28" y1="28" x2="36" y2="28" stroke="#6366f1" stroke-width="0.8" opacity="0.5" /> <line x1="28" y1="28" x2="32" y2="34" stroke="#22d3ee" stroke-width="0.8" opacity="0.5" /> <line x1="36" y1="28" x2="32" y2="34" stroke="#a78bfa" stroke-width="0.8" opacity="0.5" />
        </svg>
       </div>
      </div>
-     <div class="anim-up delay-2" style="display:inline-block;padding:6px 16px;border-radius:9999px;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:1rem;border:1px solid rgba(34,211,238,0.3);color:#22d3ee;">
-      <span class="shimmer-badge" style="padding:6px 16px;border-radius:9999px;">🧠 AI-POWERED SLEEP ANALYTICS</span>
+     <div class="anim-up delay-2" style="display:inline-block;padding:6px 16px;border-radius:9999px;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:1rem;border:1px solid rgba(34,211,238,0.3);color:#22d3ee;"><span class="shimmer-badge" style="padding:6px 16px;border-radius:9999px;">🧠 AI-POWERED SLEEP ANALYTICS</span>
      </div>
      <h1 id="hero-title" class="anim-up delay-3" style="font-size:clamp(2.5rem,6vw,4.5rem);font-weight:900;line-height:1.05;margin:0.5rem 0;"><span class="gradient-text">REMInsight</span></h1>
      <p id="hero-tagline" class="anim-up delay-4" style="font-size:clamp(1rem,2.5vw,1.35rem);color:#94a3b8;max-width:620px;margin:1rem auto 1.5rem;font-weight:300;line-height:1.6;">Application of REM Sleep Dynamics to Early Diagnosis of Psychiatric Disorders via Machine Learning</p><!-- Badges row -->
-     <div class="anim-up delay-5" style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-bottom:2rem;">
-      <span class="tech-badge"><span style="color:#22d3ee;">⚡</span> XGBoost</span> <span class="tech-badge"><span style="color:#a78bfa;">🔬</span> Fourier Analysis</span> <span class="tech-badge"><span style="color:#f472b6;">🧪</span> PSQI Integration</span> <span class="tech-badge"><span style="color:#34d399;">🌐</span> Next.js + FastAPI</span> <span class="tech-badge"><span style="color:#fbbf24;">🔒</span> Firebase Auth</span>
+     <div class="anim-up delay-5" style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-bottom:2rem;"><span class="tech-badge"><span style="color:#22d3ee;">⚡</span> XGBoost</span> <span class="tech-badge"><span style="color:#a78bfa;">🔬</span> Fourier Analysis</span> <span class="tech-badge"><span style="color:#f472b6;">🧪</span> PSQI Integration</span> <span class="tech-badge"><span style="color:#34d399;">🌐</span> Next.js + FastAPI</span> <span class="tech-badge"><span style="color:#fbbf24;">🔒</span> Firebase Auth</span>
      </div><!-- CTA buttons -->
-     <div class="anim-up delay-6" style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;">
-      <a id="demo-link" href="https://rem-insight.vercel.app/" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:12px 28px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border-radius:12px;font-weight:600;text-decoration:none;font-size:15px;transition:all 0.3s;box-shadow:0 4px 20px rgba(99,102,241,0.4);animation:glow-pulse 2s ease-in-out infinite;"> <i data-lucide="play-circle" style="width:18px;height:18px;"></i> Live Demo </a> <a href="#architecture" style="display:inline-flex;align-items:center;gap:8px;padding:12px 28px;background:transparent;color:#e2e8f0;border:1px solid rgba(99,102,241,0.4);border-radius:12px;font-weight:600;text-decoration:none;font-size:15px;transition:all 0.3s;"> <i data-lucide="book-open" style="width:18px;height:18px;"></i> Documentation </a> <a href="#quickstart" style="display:inline-flex;align-items:center;gap:8px;padding:12px 28px;background:transparent;color:#e2e8f0;border:1px solid rgba(34,211,238,0.3);border-radius:12px;font-weight:600;text-decoration:none;font-size:15px;transition:all 0.3s;"> <i data-lucide="terminal" style="width:18px;height:18px;"></i> Quick Start </a>
+     <div class="anim-up delay-6" style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;"><a id="demo-link" href="https://rem-insight.vercel.app/" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:12px 28px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border-radius:12px;font-weight:600;text-decoration:none;font-size:15px;transition:all 0.3s;box-shadow:0 4px 20px rgba(99,102,241,0.4);animation:glow-pulse 2s ease-in-out infinite;"> <i data-lucide="play-circle" style="width:18px;height:18px;"></i> Live Demo </a> <a href="#architecture" style="display:inline-flex;align-items:center;gap:8px;padding:12px 28px;background:transparent;color:#e2e8f0;border:1px solid rgba(99,102,241,0.4);border-radius:12px;font-weight:600;text-decoration:none;font-size:15px;transition:all 0.3s;"> <i data-lucide="book-open" style="width:18px;height:18px;"></i> Documentation </a> <a href="#quickstart" style="display:inline-flex;align-items:center;gap:8px;padding:12px 28px;background:transparent;color:#e2e8f0;border:1px solid rgba(34,211,238,0.3);border-radius:12px;font-weight:600;text-decoration:none;font-size:15px;transition:all 0.3s;"> <i data-lucide="terminal" style="width:18px;height:18px;"></i> Quick Start </a>
      </div>
     </header><!-- Animated EEG wave -->
     <div class="wave-container anim-up delay-7" style="margin:-1rem 0 2rem;overflow:hidden;height:80px;">
-     <svg viewbox="0 0 960 80" preserveaspectratio="none" style="width:100%;height:80px;">
-      <path d="M0 40 Q20 10 40 40 T80 40 T120 40 T160 40 T200 40 T240 40 T280 40 T320 40 T360 40 T400 40 T440 40 T480 40 T520 40 T560 40 T600 40 T640 40 T680 40 T720 40 T760 40 T800 40 T840 40 T880 40 T920 40 T960 40" fill="none" stroke="#6366f1" stroke-width="2" style="animation-delay:0s" /> <path d="M0 45 Q30 15 60 45 T120 45 T180 45 T240 45 T300 45 T360 45 T420 45 T480 45 T540 45 T600 45 T660 45 T720 45 T780 45 T840 45 T900 45 T960 45" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.6" style="animation-delay:0.5s" /> <path d="M0 38 Q25 58 50 38 T100 38 T150 38 T200 38 T250 38 T300 38 T350 38 T400 38 T450 38 T500 38 T550 38 T600 38 T650 38 T700 38 T750 38 T800 38 T850 38 T900 38 T950 38" fill="none" stroke="#a78bfa" stroke-width="1" opacity="0.4" style="animation-delay:1s" />
+     <svg viewbox="0 0 960 80" preserveaspectratio="none" style="width:100%;height:80px;"><path d="M0 40 Q20 10 40 40 T80 40 T120 40 T160 40 T200 40 T240 40 T280 40 T320 40 T360 40 T400 40 T440 40 T480 40 T520 40 T560 40 T600 40 T640 40 T680 40 T720 40 T760 40 T800 40 T840 40 T880 40 T920 40 T960 40" fill="none" stroke="#6366f1" stroke-width="2" style="animation-delay:0s" /> <path d="M0 45 Q30 15 60 45 T120 45 T180 45 T240 45 T300 45 T360 45 T420 45 T480 45 T540 45 T600 45 T660 45 T720 45 T780 45 T840 45 T900 45 T960 45" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.6" style="animation-delay:0.5s" /> <path d="M0 38 Q25 58 50 38 T100 38 T150 38 T200 38 T250 38 T300 38 T350 38 T400 38 T450 38 T500 38 T550 38 T600 38 T650 38 T700 38 T750 38 T800 38 T850 38 T900 38 T950 38" fill="none" stroke="#a78bfa" stroke-width="1" opacity="0.4" style="animation-delay:1s" />
      </svg>
     </div>
     <div class="section-divider"></div><!-- TABLE OF CONTENTS -->
     <section class="scroll-reveal" style="margin-bottom:2rem;">
-     <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;">
-      <i data-lucide="list" style="width:20px;height:20px;color:#6366f1;"></i>
+     <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;"><i data-lucide="list" style="width:20px;height:20px;color:#6366f1;"></i>
       <h2 style="font-size:1.25rem;font-weight:700;margin:0;">Table of Contents</h2>
      </div>
-     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 2rem;padding:1rem;background:rgba(17,24,39,0.6);border-radius:12px;border:1px solid rgba(99,102,241,0.1);">
-      <a href="#overview" class="toc-link"><span style="color:#6366f1;">01</span> Overview</a> <a href="#features" class="toc-link"><span style="color:#6366f1;">02</span> Key Features</a> <a href="#architecture" class="toc-link"><span style="color:#6366f1;">03</span> Architecture</a> <a href="#ml-pipeline" class="toc-link"><span style="color:#6366f1;">04</span> ML Pipeline</a> <a href="#tech-stack" class="toc-link"><span style="color:#6366f1;">05</span> Tech Stack</a> <a href="#quickstart" class="toc-link"><span style="color:#6366f1;">06</span> Quick Start</a> <a href="#metrics" class="toc-link"><span style="color:#6366f1;">07</span> Performance</a> <a href="#research" class="toc-link"><span style="color:#6366f1;">08</span> Research Basis</a>
+     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 2rem;padding:1rem;background:rgba(17,24,39,0.6);border-radius:12px;border:1px solid rgba(99,102,241,0.1);"><a href="#overview" class="toc-link"><span style="color:#6366f1;">01</span> Overview</a> <a href="#features" class="toc-link"><span style="color:#6366f1;">02</span> Key Features</a> <a href="#architecture" class="toc-link"><span style="color:#6366f1;">03</span> Architecture</a> <a href="#ml-pipeline" class="toc-link"><span style="color:#6366f1;">04</span> ML Pipeline</a> <a href="#tech-stack" class="toc-link"><span style="color:#6366f1;">05</span> Tech Stack</a> <a href="#quickstart" class="toc-link"><span style="color:#6366f1;">06</span> Quick Start</a> <a href="#metrics" class="toc-link"><span style="color:#6366f1;">07</span> Performance</a> <a href="#research" class="toc-link"><span style="color:#6366f1;">08</span> Research Basis</a>
      </div>
     </section>
     <div class="section-divider"></div><!-- OVERVIEW -->
     <section id="overview" class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="info" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#4f46e5);display:flex;align-items:center;justify-content:center;"><i data-lucide="info" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Overview</h2>
      </div>
@@ -381,51 +370,43 @@
     </section><!-- KEY FEATURES -->
     <section id="features" class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#22d3ee,#06b6d4);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="zap" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#22d3ee,#06b6d4);display:flex;align-items:center;justify-content:center;"><i data-lucide="zap" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Key Features</h2>
      </div>
-     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
-      <!-- Feature cards -->
+     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;"><!-- Feature cards -->
       <div class="card-glow" style="background:var(--surface);border-radius:16px;padding:1.25rem;border:1px solid rgba(99,102,241,0.15);transition:all 0.3s;cursor:default;animation:slideInUp 0.8s ease-out backwards;" onmouseenter="this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(99,102,241,0.3)'" onmouseleave="this.style.transform='translateY(0)';this.style.boxShadow=''">
-       <div class="feature-icon-wrap" style="background:rgba(99,102,241,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;">
-        <i data-lucide="brain" style="width:28px;height:28px;color:#6366f1;"></i>
+       <div class="feature-icon-wrap" style="background:rgba(99,102,241,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;"><i data-lucide="brain" style="width:28px;height:28px;color:#6366f1;"></i>
        </div>
        <h3 style="font-size:1rem;font-weight:700;margin:0 0 0.5rem;">AI-Powered Analysis</h3>
        <p style="font-size:13px;color:#94a3b8;margin:0;line-height:1.6;">XGBoost classifier with Fourier-based spectral feature extraction for precise REM sleep pattern recognition.</p>
       </div>
       <div class="card-glow" style="background:var(--surface);border-radius:16px;padding:1.25rem;border:1px solid rgba(99,102,241,0.15);transition:all 0.3s;cursor:default;animation:slideInUp 0.8s ease-out backwards;" onmouseenter="this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(34,211,238,0.3)'" onmouseleave="this.style.transform='translateY(0)';this.style.boxShadow=''">
-       <div class="feature-icon-wrap" style="background:rgba(34,211,238,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;">
-        <i data-lucide="activity" style="width:28px;height:28px;color:#22d3ee;"></i>
+       <div class="feature-icon-wrap" style="background:rgba(34,211,238,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;"><i data-lucide="activity" style="width:28px;height:28px;color:#22d3ee;"></i>
        </div>
        <h3 style="font-size:1rem;font-weight:700;margin:0 0 0.5rem;">Real-Time Monitoring</h3>
        <p style="font-size:13px;color:#94a3b8;margin:0;line-height:1.6;">Continuous sleep data processing with live risk assessment dashboards for clinicians and patients.</p>
       </div>
       <div class="card-glow" style="background:var(--surface);border-radius:16px;padding:1.25rem;border:1px solid rgba(99,102,241,0.15);transition:all 0.3s;cursor:default;animation:slideInUp 0.8s ease-out backwards;" onmouseenter="this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(167,139,250,0.3)'" onmouseleave="this.style.transform='translateY(0)';this.style.boxShadow=''">
-       <div class="feature-icon-wrap" style="background:rgba(167,139,250,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;">
-        <i data-lucide="shield" style="width:28px;height:28px;color:#a78bfa;"></i>
+       <div class="feature-icon-wrap" style="background:rgba(167,139,250,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;"><i data-lucide="shield" style="width:28px;height:28px;color:#a78bfa;"></i>
        </div>
        <h3 style="font-size:1rem;font-weight:700;margin:0 0 0.5rem;">Secure &amp; Private</h3>
        <p style="font-size:13px;color:#94a3b8;margin:0;line-height:1.6;">Firebase authentication with encrypted data storage ensuring HIPAA-conscious data handling.</p>
       </div>
       <div class="card-glow" style="background:var(--surface);border-radius:16px;padding:1.25rem;border:1px solid rgba(99,102,241,0.15);transition:all 0.3s;cursor:default;animation:slideInUp 0.8s ease-out backwards;" onmouseenter="this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(244,114,182,0.3)'" onmouseleave="this.style.transform='translateY(0)';this.style.boxShadow=''">
-       <div class="feature-icon-wrap" style="background:rgba(244,114,182,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;">
-        <i data-lucide="bar-chart-2" style="width:28px;height:28px;color:#f472b6;"></i>
+       <div class="feature-icon-wrap" style="background:rgba(244,114,182,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;"><i data-lucide="bar-chart-2" style="width:28px;height:28px;color:#f472b6;"></i>
        </div>
        <h3 style="font-size:1rem;font-weight:700;margin:0 0 0.5rem;">PSQI Integration</h3>
        <p style="font-size:13px;color:#94a3b8;margin:0;line-height:1.6;">Hybrid scoring combining objective REM parameters with subjective sleep quality assessments.</p>
       </div>
       <div class="card-glow" style="background:var(--surface);border-radius:16px;padding:1.25rem;border:1px solid rgba(99,102,241,0.15);transition:all 0.3s;cursor:default;animation:slideInUp 0.8s ease-out backwards;" onmouseenter="this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(52,211,153,0.3)'" onmouseleave="this.style.transform='translateY(0)';this.style.boxShadow=''">
-       <div class="feature-icon-wrap" style="background:rgba(52,211,153,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;">
-        <i data-lucide="git-branch" style="width:28px;height:28px;color:#34d399;"></i>
+       <div class="feature-icon-wrap" style="background:rgba(52,211,153,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;"><i data-lucide="git-branch" style="width:28px;height:28px;color:#34d399;"></i>
        </div>
        <h3 style="font-size:1rem;font-weight:700;margin:0 0 0.5rem;">CI/CD Pipeline</h3>
        <p style="font-size:13px;color:#94a3b8;margin:0;line-height:1.6;">Automated deployment via GitHub Actions, Vercel, and Render with continuous version control.</p>
       </div>
       <div class="card-glow" style="background:var(--surface);border-radius:16px;padding:1.25rem;border:1px solid rgba(99,102,241,0.15);transition:all 0.3s;cursor:default;animation:slideInUp 0.8s ease-out backwards;" onmouseenter="this.style.transform='translateY(-8px)';this.style.boxShadow='0 20px 40px rgba(251,191,36,0.3)'" onmouseleave="this.style.transform='translateY(0)';this.style.boxShadow=''">
-       <div class="feature-icon-wrap" style="background:rgba(251,191,36,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;">
-        <i data-lucide="stethoscope" style="width:28px;height:28px;color:#fbbf24;"></i>
+       <div class="feature-icon-wrap" style="background:rgba(251,191,36,0.12);margin-bottom:0.75rem;animation:popIn 0.6s ease-out backwards;"><i data-lucide="stethoscope" style="width:28px;height:28px;color:#fbbf24;"></i>
        </div>
        <h3 style="font-size:1rem;font-weight:700;margin:0 0 0.5rem;">Clinical Accessibility</h3>
        <p style="font-size:13px;color:#94a3b8;margin:0;line-height:1.6;">Web-based interface providing clinicians and individuals accessible proactive mental health monitoring.</p>
@@ -435,14 +416,12 @@
     <div class="section-divider"></div><!-- ARCHITECTURE -->
     <section id="architecture" class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#a78bfa,#7c3aed);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="layers" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#a78bfa,#7c3aed);display:flex;align-items:center;justify-content:center;"><i data-lucide="layers" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">System Architecture</h2>
      </div><!-- Architecture diagram -->
      <div style="background:var(--surface);border-radius:16px;padding:1.5rem;border:1px solid rgba(99,102,241,0.1);overflow-x:auto;">
-      <div style="display:flex;flex-direction:column;gap:12px;min-width:500px;">
-       <!-- Layer 1: Frontend -->
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:500px;"><!-- Layer 1: Frontend -->
        <div style="display:flex;align-items:center;gap:12px;">
         <div style="flex:1;padding:16px;border-radius:12px;background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(99,102,241,0.05));border:1px solid rgba(99,102,241,0.3);text-align:center;">
          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;font-weight:600;margin-bottom:4px;">
@@ -468,7 +447,8 @@
         </div>
        </div><!-- Arrow -->
        <div style="text-align:center;color:#6366f1;font-size:20px;">
-        <svg width="24" height="24" viewbox="0 0 24 24" fill="none" style="margin:0 auto;display:block;"><path d="M12 5v14M5 12l7 7 7-7" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <svg width="24" height="24" viewbox="0 0 24 24" fill="none" style="margin:0 auto;display:block;">
+         <path d="M12 5v14M5 12l7 7 7-7" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
        </div><!-- Layer 2: Backend -->
        <div style="display:flex;align-items:center;gap:12px;">
@@ -496,7 +476,8 @@
         </div>
        </div><!-- Arrow -->
        <div style="text-align:center;">
-        <svg width="24" height="24" viewbox="0 0 24 24" fill="none" style="margin:0 auto;display:block;"><path d="M12 5v14M5 12l7 7 7-7" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <svg width="24" height="24" viewbox="0 0 24 24" fill="none" style="margin:0 auto;display:block;">
+         <path d="M12 5v14M5 12l7 7 7-7" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
        </div><!-- Layer 3: CI/CD -->
        <div style="padding:16px;border-radius:12px;background:linear-gradient(135deg,rgba(52,211,153,0.15),rgba(52,211,153,0.05));border:1px solid rgba(52,211,153,0.3);text-align:center;">
@@ -504,11 +485,14 @@
          CI/CD Pipeline
         </div>
         <div style="display:flex;justify-content:center;gap:2rem;flex-wrap:wrap;">
-         <div><span style="font-weight:700;">GitHub</span> <span style="font-size:12px;color:#94a3b8;">Version Control</span>
+         <div>
+          <span style="font-weight:700;">GitHub</span> <span style="font-size:12px;color:#94a3b8;">Version Control</span>
          </div>
-         <div><span style="font-weight:700;">Vercel</span> <span style="font-size:12px;color:#94a3b8;">Frontend Deploy</span>
+         <div>
+          <span style="font-weight:700;">Vercel</span> <span style="font-size:12px;color:#94a3b8;">Frontend Deploy</span>
          </div>
-         <div><span style="font-weight:700;">Render</span> <span style="font-size:12px;color:#94a3b8;">Backend Deploy</span>
+         <div>
+          <span style="font-weight:700;">Render</span> <span style="font-size:12px;color:#94a3b8;">Backend Deploy</span>
          </div>
         </div>
        </div>
@@ -518,8 +502,7 @@
     <div class="section-divider"></div><!-- ML PIPELINE -->
     <section id="ml-pipeline" class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f472b6,#ec4899);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="cpu" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f472b6,#ec4899);display:flex;align-items:center;justify-content:center;"><i data-lucide="cpu" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">ML Pipeline</h2>
      </div>
@@ -554,8 +537,7 @@
     <div class="section-divider"></div><!-- TECH STACK -->
     <section id="tech-stack" class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#34d399,#10b981);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="code-2" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#34d399,#10b981);display:flex;align-items:center;justify-content:center;"><i data-lucide="code-2" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Tech Stack</h2>
      </div>
@@ -631,8 +613,7 @@
     <div class="section-divider"></div><!-- QUICK START -->
     <section id="quickstart" class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="terminal" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#fbbf24,#f59e0b);display:flex;align-items:center;justify-content:center;"><i data-lucide="terminal" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Quick Start</h2>
      </div>
@@ -674,8 +655,7 @@
     <div class="section-divider"></div><!-- PERFORMANCE METRICS -->
     <section id="metrics" class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#ef4444,#dc2626);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="trending-up" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#ef4444,#dc2626);display:flex;align-items:center;justify-content:center;"><i data-lucide="trending-up" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Performance Metrics</h2>
      </div>
@@ -729,16 +709,14 @@
     <div class="section-divider"></div><!-- RESEARCH BASIS -->
     <section id="research" class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#06b6d4,#0891b2);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="book" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#06b6d4,#0891b2);display:flex;align-items:center;justify-content:center;"><i data-lucide="book" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Research Foundation</h2>
      </div>
      <div style="background:var(--surface);border-radius:16px;padding:1.5rem;border:1px solid rgba(99,102,241,0.1);">
       <div style="display:grid;gap:1rem;">
        <div style="display:flex;gap:12px;align-items:flex-start;">
-        <div style="min-width:28px;height:28px;border-radius:8px;background:rgba(99,102,241,0.15);display:flex;align-items:center;justify-content:center;margin-top:2px;">
-         <i data-lucide="file-text" style="width:14px;height:14px;color:#6366f1;"></i>
+        <div style="min-width:28px;height:28px;border-radius:8px;background:rgba(99,102,241,0.15);display:flex;align-items:center;justify-content:center;margin-top:2px;"><i data-lucide="file-text" style="width:14px;height:14px;color:#6366f1;"></i>
         </div>
         <div>
          <div style="font-weight:600;font-size:14px;margin-bottom:2px;">
@@ -750,8 +728,7 @@
         </div>
        </div>
        <div style="display:flex;gap:12px;align-items:flex-start;">
-        <div style="min-width:28px;height:28px;border-radius:8px;background:rgba(34,211,238,0.15);display:flex;align-items:center;justify-content:center;margin-top:2px;">
-         <i data-lucide="file-text" style="width:14px;height:14px;color:#22d3ee;"></i>
+        <div style="min-width:28px;height:28px;border-radius:8px;background:rgba(34,211,238,0.15);display:flex;align-items:center;justify-content:center;margin-top:2px;"><i data-lucide="file-text" style="width:14px;height:14px;color:#22d3ee;"></i>
         </div>
         <div>
          <div style="font-weight:600;font-size:14px;margin-bottom:2px;">
@@ -763,8 +740,7 @@
         </div>
        </div>
        <div style="display:flex;gap:12px;align-items:flex-start;">
-        <div style="min-width:28px;height:28px;border-radius:8px;background:rgba(167,139,250,0.15);display:flex;align-items:center;justify-content:center;margin-top:2px;">
-         <i data-lucide="file-text" style="width:14px;height:14px;color:#a78bfa;"></i>
+        <div style="min-width:28px;height:28px;border-radius:8px;background:rgba(167,139,250,0.15);display:flex;align-items:center;justify-content:center;margin-top:2px;"><i data-lucide="file-text" style="width:14px;height:14px;color:#a78bfa;"></i>
         </div>
         <div>
          <div style="font-weight:600;font-size:14px;margin-bottom:2px;">
@@ -776,8 +752,7 @@
         </div>
        </div>
        <div style="display:flex;gap:12px;align-items:flex-start;">
-        <div style="min-width:28px;height:28px;border-radius:8px;background:rgba(244,114,182,0.15);display:flex;align-items:center;justify-content:center;margin-top:2px;">
-         <i data-lucide="file-text" style="width:14px;height:14px;color:#f472b6;"></i>
+        <div style="min-width:28px;height:28px;border-radius:8px;background:rgba(244,114,182,0.15);display:flex;align-items:center;justify-content:center;margin-top:2px;"><i data-lucide="file-text" style="width:14px;height:14px;color:#f472b6;"></i>
         </div>
         <div>
          <div style="font-weight:600;font-size:14px;margin-bottom:2px;">
@@ -794,14 +769,14 @@
     <div class="section-divider"></div><!-- EXPORT TO GITHUB SECTION -->
     <section class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#db2777);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="download" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#db2777);display:flex;align-items:center;justify-content:center;"><i data-lucide="download" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Export for GitHub</h2>
      </div>
      <div style="background:var(--surface);border-radius:16px;padding:1.5rem;border:1px solid rgba(99,102,241,0.1);margin-bottom:1rem;">
       <p style="font-size:13px;color:#cbd5e1;margin:0 0 1rem;">Copy the markdown below and paste it into your GitHub repository as <code style="background:rgba(99,102,241,0.2);padding:2px 6px;border-radius:4px;color:#a5b4fc;">README.md</code></p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem;"><button onclick="copyMarkdown()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:14px;transition:all 0.3s;"><i data-lucide="copy" style="width:16px;height:16px;"></i> Copy to Clipboard</button> <button onclick="downloadMarkdown()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:transparent;color:#e2e8f0;border:1px solid rgba(99,102,241,0.4);border-radius:10px;font-weight:600;cursor:pointer;font-size:14px;transition:all 0.3s;"><i data-lucide="download" style="width:16px;height:16px;"></i> Download README.md</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem;">
+       <button onclick="copyMarkdown()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:14px;transition:all 0.3s;"><i data-lucide="copy" style="width:16px;height:16px;"></i> Copy to Clipboard</button> <button onclick="downloadMarkdown()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:transparent;color:#e2e8f0;border:1px solid rgba(99,102,241,0.4);border-radius:10px;font-weight:600;cursor:pointer;font-size:14px;transition:all 0.3s;"><i data-lucide="download" style="width:16px;height:16px;"></i> Download README.md</button>
       </div>
      </div>
      <div class="code-block">
@@ -816,8 +791,7 @@
     <div class="section-divider"></div><!-- PROJECT STRUCTURE -->
     <section class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
-      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;">
-       <i data-lucide="folder" style="width:18px;height:18px;color:#fff;"></i>
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#f97316,#ea580c);display:flex;align-items:center;justify-content:center;"><i data-lucide="folder" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Project Structure</h2>
      </div>
@@ -853,18 +827,15 @@
     <section class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
       <div style="background:var(--surface);border-radius:16px;padding:1.25rem;border:1px solid rgba(99,102,241,0.1);">
-       <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;">
-        <i data-lucide="users" style="width:18px;height:18px;color:#6366f1;"></i>
+       <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;"><i data-lucide="users" style="width:18px;height:18px;color:#6366f1;"></i>
         <h3 style="font-size:1rem;font-weight:700;margin:0;">Contributing</h3>
        </div>
        <p style="font-size:13px;color:#94a3b8;margin:0 0 0.75rem;line-height:1.6;">Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request.</p>
-       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <span class="tech-badge" style="font-size:11px;"><i data-lucide="git-pull-request" style="width:12px;height:12px;"></i> PRs Welcome</span> <span class="tech-badge" style="font-size:11px;"><i data-lucide="message-circle" style="width:12px;height:12px;"></i> Issues</span>
+       <div style="display:flex;gap:8px;flex-wrap:wrap;"><span class="tech-badge" style="font-size:11px;"><i data-lucide="git-pull-request" style="width:12px;height:12px;"></i> PRs Welcome</span> <span class="tech-badge" style="font-size:11px;"><i data-lucide="message-circle" style="width:12px;height:12px;"></i> Issues</span>
        </div>
       </div>
       <div style="background:var(--surface);border-radius:16px;padding:1.25rem;border:1px solid rgba(99,102,241,0.1);">
-       <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;">
-        <i data-lucide="scale" style="width:18px;height:18px;color:#22d3ee;"></i>
+       <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;"><i data-lucide="scale" style="width:18px;height:18px;color:#22d3ee;"></i>
         <h3 style="font-size:1rem;font-weight:700;margin:0;">License</h3>
        </div>
        <p style="font-size:13px;color:#94a3b8;margin:0 0 0.75rem;line-height:1.6;">This project is licensed under the MIT License. See the LICENSE file for details.</p><span class="tech-badge" style="font-size:11px;"><i data-lucide="file-text" style="width:12px;height:12px;"></i> MIT License</span>
@@ -902,7 +873,7 @@
 
 <div align="center">
 
-[![Live Demo](https://img.shields.io/badge/🔗%20Live%20Demo-Visit%20Now-6366f1?style=for-the-badge)](${demoUrl})
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Now-6366f1?style=for-the-badge)](${demoUrl})
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-222?style=for-the-badge&logo=github)](https://github.com/your-username/REMInsight)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776ab?style=for-the-badge&logo=python)](https://python.org)
 [![Node.js](https://img.shields.io/badge/Node.js-16%2B-68a063?style=for-the-badge&logo=node.js)](https://nodejs.org)
@@ -912,7 +883,7 @@
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
 - [Key Features](#key-features)
@@ -924,7 +895,6 @@
 - [Research Foundation](#research-foundation)
 - [Project Structure](#project-structure)
 - [Installation](#installation)
-- [Usage](#usage)
 - [API Endpoints](#api-endpoints)
 - [Contributing](#contributing)
 - [License](#license)
@@ -932,7 +902,7 @@
 
 ---
 
-## 🧠 Overview
+## Overview
 
 **${title}** is an AI-driven psychiatric risk assessment platform that leverages **REM sleep dynamics** for early diagnosis of psychiatric disorders including depression, anxiety, and schizophrenia.
 
@@ -940,7 +910,7 @@ The system integrates **objective REM sleep parameters** with subjective **Pitts
 
 By employing the **XGBoost algorithm** — a gradient boosting model known for high accuracy and interpretability — the platform classifies risk levels based on extracted temporal and spectral features from sleep data, enabling **non-invasive, real-time, and data-supported** psychiatric risk assessment.
 
-### 🎯 Key Objectives
+### Key Objectives
 
 - Provide clinicians with AI-assisted early detection tools for psychiatric disorders
 - Enable personalized risk stratification based on sleep biomarkers
@@ -949,421 +919,304 @@ By employing the **XGBoost algorithm** — a gradient boosting model known for h
 
 ---
 
-## ⚡ Key Features
+## Key Features
 
-### 🧠 AI-Powered Analysis
+### AI-Powered Analysis
 XGBoost classifier with Fourier-based spectral feature extraction for precise REM sleep pattern recognition.
 
-### 📊 Real-Time Monitoring
+### Real-Time Monitoring
 Continuous sleep data processing with live risk assessment dashboards for clinicians and patients.
 
-### 🔒 Secure & Private
+### Secure & Private
 Firebase authentication with encrypted data storage ensuring HIPAA-conscious data handling.
 
-### 🧪 PSQI Integration
+### PSQI Integration
 Hybrid scoring combining objective REM parameters with subjective sleep quality assessments.
 
-### 🌐 CI/CD Pipeline
+### CI/CD Pipeline
 Automated deployment via GitHub Actions, Vercel, and Render with continuous version control.
 
-### 🏥 Clinical Accessibility
+### Clinical Accessibility
 Web-based interface providing clinicians and individuals accessible proactive mental health monitoring.
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 \`\`\`
-┌─────────────────────────────────────────────────────────┐
-│                    Frontend Layer                        │
-│         Next.js + React + TypeScript + Tailwind         │
-│              (Vercel Deployment)                         │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│              Authentication & Storage                    │
-│         Firebase Auth + Firestore Database              │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│                   Backend API Layer                      │
-│     FastAPI + Python + Async Processing                │
-│              (Render Deployment)                         │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│                   ML Engine Layer                        │
-│      XGBoost + Scikit-learn + NumPy + SciPy            │
-│    Feature Engineering + Risk Classification             │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│                 CI/CD Pipeline                           │
-│  GitHub Actions → Vercel/Render → Production            │
-└─────────────────────────────────────────────────────────┘
+Frontend (Next.js + React + TypeScript)
+           |
+Authentication & Storage (Firebase)
+           |
+Backend API (FastAPI + Python)
+           |
+ML Engine (XGBoost + Scikit-learn)
+           |
+CI/CD Pipeline (GitHub Actions → Vercel/Render)
 \`\`\`
 
----
+### Stack Layers
 
-## 🔬 ML Pipeline
-
-### 1️⃣ Data Acquisition
-- Collect polysomnography (PSG) signals and PSQI questionnaire responses
-- Extract EEG, EOG, and EMG channels specific to REM epochs
-- Validate data quality and completeness
-
-### 2️⃣ Feature Engineering
-- Apply **Fourier-based transformations** for spectral decomposition
-- Extract temporal features:
-  - REM latency (time to first REM period)
-  - REM density (eye movements per minute)
-  - REM duration ratios
-  - Sleep cycle regularity
-
-### 3️⃣ Hybrid Scoring
-- Combine objective REM metrics with subjective PSQI component scores
-- Create unified feature vector for comprehensive sleep quality representation
-- Normalize features for model compatibility
-
-### 4️⃣ XGBoost Classification
-- Train gradient-boosted decision trees
-- Hyperparameter tuning via cross-validation
-- Multi-class classification:
-  - 🟢 **Low Risk** - Minimal psychiatric indicators
-  - 🟡 **Moderate Risk** - Requires monitoring
-  - 🔴 **High Risk** - Immediate clinical attention
-
-### 5️⃣ Risk Assessment Output
-- Generate interpretable risk reports with feature importance rankings
-- Provide confidence scores for each prediction
-- Recommend clinical follow-up actions
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 14+, React 18+, TypeScript, Tailwind CSS |
+| Auth | Firebase Authentication |
+| Database | Firestore + Cloud Storage |
+| Backend | FastAPI, Python 3.8+ |
+| ML | XGBoost, Scikit-learn, NumPy, SciPy |
+| Deployment | Vercel (Frontend), Render (Backend) |
 
 ---
 
-## 🛠️ Tech Stack
+## ML Pipeline
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Frontend** | Next.js 14+ | React framework with server-side rendering |
-| | React 18+ | UI component library |
-| | TypeScript | Type-safe JavaScript |
-| | Tailwind CSS | Utility-first CSS framework |
-| | Firebase SDK | Authentication & real-time sync |
-| **Backend** | FastAPI | High-performance async Python API |
-| | Python 3.8+ | Core backend language |
-| | Uvicorn | ASGI web server |
-| | SQLAlchemy | Database ORM |
-| **ML/AI** | XGBoost | Gradient boosting classifier |
-| | Scikit-learn | Machine learning utilities |
-| | NumPy | Numerical computing |
-| | SciPy | Scientific computing |
-| | Pandas | Data manipulation |
-| **Auth & DB** | Firebase Auth | User authentication |
-| | Firestore | NoSQL document database |
-| | Cloud Storage | Encrypted file storage |
-| **DevOps** | GitHub | Version control & CI/CD |
-| | GitHub Actions | Automated workflows |
-| | Vercel | Frontend deployment |
-| | Render | Backend deployment |
-| | Docker | Containerization |
+### 1. Data Acquisition
+Collect polysomnography (PSG) signals and PSQI questionnaire responses. Extract EEG, EOG, and EMG channels specific to REM epochs.
+
+### 2. Feature Engineering
+Apply **Fourier-based transformations** for spectral decomposition. Extract temporal features: REM latency, density, duration ratios, and cycle regularity.
+
+### 3. Hybrid Scoring
+Combine objective REM metrics with subjective PSQI component scores into a unified feature vector for comprehensive sleep quality representation.
+
+### 4. XGBoost Classification
+Train gradient-boosted decision trees with hyperparameter tuning via cross-validation. Classify into risk categories: Low, Moderate, High.
+
+### 5. Risk Assessment Output
+Generate interpretable risk reports with feature importance rankings, confidence scores, and recommended clinical follow-up actions.
 
 ---
 
-## 🚀 Quick Start
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| **Frontend Framework** | Next.js 14+ |
+| **UI Library** | React 18+ |
+| **Language** | TypeScript |
+| **Styling** | Tailwind CSS |
+| **Backend Framework** | FastAPI |
+| **Backend Language** | Python 3.8+ |
+| **ML Classifier** | XGBoost |
+| **ML Libraries** | Scikit-learn, NumPy, SciPy, Pandas |
+| **Authentication** | Firebase Auth |
+| **Database** | Firestore |
+| **Storage** | Cloud Storage |
+| **Frontend Deploy** | Vercel |
+| **Backend Deploy** | Render |
+| **Version Control** | GitHub |
+| **CI/CD** | GitHub Actions |
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
-Before you begin, ensure you have:
+- Node.js 16+ ([download](https://nodejs.org))
+- Python 3.8+ ([download](https://python.org))
+- Git ([download](https://git-scm.com))
+- Firebase Account ([create here](https://firebase.google.com))
 
-- **Node.js** 16 or higher ([download](https://nodejs.org))
-- **Python** 3.8 or higher ([download](https://python.org))
-- **Git** ([download](https://git-scm.com))
-- **Firebase Account** ([create free account](https://firebase.google.com))
+### Installation Steps
 
-### Installation
-
-1. **Clone the repository**
+1. Clone the repository:
 
 \`\`\`bash
 git clone https://github.com/your-username/REMInsight.git
 cd REMInsight
 \`\`\`
 
-2. **Set up Frontend**
+2. Setup Frontend:
 
 \`\`\`bash
 cd frontend
 npm install
 \`\`\`
 
-3. **Set up Backend**
+3. Setup Backend:
 
 \`\`\`bash
 cd ../backend
 python -m venv venv
-
-# On Windows
-venv\\\\Scripts\\\\activate
-# On macOS/Linux
-source venv/bin/activate
-
+source venv/bin/activate  # Windows: venv\\\\Scripts\\\\activate
 pip install -r requirements.txt
 \`\`\`
 
-4. **Configure Environment Variables**
+4. Configure Environment Variables
 
-Create \`.env.local\` in the frontend directory:
-
+Frontend (.env.local):
 \`\`\`env
-# Firebase Configuration
-NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_API_KEY=your_key
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_bucket.appspot.com
-
-# API Configuration
 NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_API_TIMEOUT=30000
 \`\`\`
 
-Create \`.env\` in the backend directory:
-
+Backend (.env):
 \`\`\`env
-# Database
 DATABASE_URL=your_database_url
-SQLALCHEMY_ECHO=False
-
-# ML Model
 MODEL_PATH=./models/xgboost_rem.pkl
-FEATURE_SCALER_PATH=./models/scaler.pkl
-
-# Firebase
-FIREBASE_CREDENTIALS_PATH=./config/firebase-credentials.json
-
-# Security
-SECRET_KEY=your-secret-key-here
-DEBUG=False
+SECRET_KEY=your_secret_key
 \`\`\`
 
-### Running the Application
+5. Run the Application
 
-**Terminal 1 - Frontend (Next.js)**
-
+Frontend:
 \`\`\`bash
 cd frontend
 npm run dev
-# Frontend available at http://localhost:3000
 \`\`\`
 
-**Terminal 2 - Backend (FastAPI)**
-
+Backend:
 \`\`\`bash
 cd backend
-source venv/bin/activate  # or \`venv\\\\Scripts\\\\activate\` on Windows
 uvicorn main:app --reload --port 8000
-# API available at http://localhost:8000
-# Docs at http://localhost:8000/docs
 \`\`\`
+
+Access:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
 ---
 
-## 📈 Performance Metrics
+## Performance Metrics
 
 ### Model Performance
 
-| Metric | Score | Interpretation |
-|--------|-------|-----------------|
-| **Accuracy** | 94.2% | Correctly classifies 94.2% of cases |
-| **AUC-ROC** | 0.96 | Excellent discrimination between classes |
-| **Precision** | 91.8% | 91.8% of predicted positives are correct |
-| **Recall** | 93.5% | Detects 93.5% of actual high-risk cases |
-| **F1-Score** | 0.926 | Strong balance between precision & recall |
-| **Specificity** | 95.1% | 95.1% correct identification of low-risk cases |
+| Metric | Score |
+|--------|-------|
+| **Accuracy** | 94.2% |
+| **AUC-ROC** | 0.96 |
+| **Precision** | 91.8% |
+| **Recall** | 93.5% |
+| **F1-Score** | 0.926 |
+| **Specificity** | 95.1% |
 
 ### Clinical Impact
 
-- **False Negative Rate**: < 8% (minimizes missed diagnoses)
-- **False Positive Rate**: < 5% (reduces unnecessary referrals)
-- **Average Inference Time**: 250ms per assessment
-- **Dataset Size**: 2,500+ polysomnography recordings
+- False Negative Rate: < 8%
+- False Positive Rate: < 5%
+- Average Inference Time: 250ms per assessment
+- Dataset Size: 2,500+ polysomnography recordings
 
 ---
 
-## 📚 Research Foundation
+## Research Foundation
 
 ### REM Sleep & Depression
-Shortened REM latency and increased REM density are established biomarkers for major depressive disorder (MDD). Patients with depression typically show REM periods occurring within 60-90 minutes of sleep onset, compared to 90-120 minutes in healthy individuals.
-
-**Reference:** *Neuropsychology Review*, 2021
+Shortened REM latency and increased REM density are established biomarkers for major depressive disorder (MDD). Reference: *Neuropsychology Review*, 2021
 
 ### Anxiety & Sleep Architecture
-Generalized anxiety disorder correlates with fragmented REM cycles and elevated Pittsburgh Sleep Quality Index (PSQI) global scores. Anxiety disrupts normal sleep architecture, reducing REM consolidation time.
-
-**Reference:** *Sleep Medicine Reviews*, 2020
+Generalized anxiety disorder correlates with fragmented REM cycles and elevated PSQI scores. Reference: *Sleep Medicine Reviews*, 2020
 
 ### Schizophrenia & REM Abnormalities
-Reduced REM sleep percentage and irregular spectral power distributions observed in schizophrenia spectrum disorders. Spectral analysis reveals abnormal oscillatory activity in the theta and beta bands during REM periods.
-
-**Reference:** *Journal of Psychiatric Research*, 2022
+Reduced REM sleep percentage and irregular spectral power distributions in schizophrenia spectrum disorders. Reference: *Journal of Psychiatric Research*, 2022
 
 ### XGBoost in Clinical ML
-Gradient boosting methods demonstrate superior performance in clinical classification tasks with tabular biomedical data. XGBoost provides both high accuracy and interpretability through SHAP values.
-
-**Reference:** *Nature Medicine*, 2021
+Gradient boosting methods demonstrate superior performance in clinical classification with tabular biomedical data. Reference: *Nature Medicine*, 2021
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 \`\`\`
 REMInsight/
-│
-├── frontend/                    # Next.js web application
-│   ├── public/                  # Static assets
+├── frontend/
+│   ├── public/
 │   ├── src/
-│   │   ├── app/                 # Next.js app directory
-│   │   ├── components/          # Reusable React components
-│   │   ├── hooks/               # Custom React hooks
-│   │   ├── lib/                 # Utility functions & helpers
-│   │   ├── services/            # API service layer
-│   │   └── types/               # TypeScript type definitions
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   ├── services/
+│   │   └── types/
 │   ├── package.json
-│   ├── tsconfig.json
-│   ├── tailwind.config.js
 │   └── next.config.js
-│
-├── backend/                     # FastAPI backend
+├── backend/
 │   ├── app/
-│   │   ├── api/                 # API route handlers
-│   │   ├── ml/                  # Machine learning pipeline
-│   │   │   ├── preprocess.py    # Feature engineering
-│   │   │   ├── train.py         # Model training
-│   │   │   └── predict.py       # Inference engine
-│   │   ├── database/            # Database models & queries
-│   │   ├── schemas/             # Pydantic models
-│   │   └── core/                # Configuration & utilities
-│   ├── models/                  # Trained model artifacts
-│   │   ├── xgboost_rem.pkl      # XGBoost classifier
-│   │   └── scaler.pkl           # Feature scaler
-│   ├── tests/                   # Unit & integration tests
+│   │   ├── api/
+│   │   ├── ml/
+│   │   ├── database/
+│   │   ├── schemas/
+│   │   └── core/
+│   ├── models/
 │   ├── requirements.txt
-│   ├── main.py                  # FastAPI app entry point
-│   └── .env.example
-│
-├── .github/
-│   └── workflows/               # CI/CD GitHub Actions
-│       ├── test.yml
-│       ├── deploy-frontend.yml
-│       └── deploy-backend.yml
-│
-├── docs/                        # Documentation
-│   ├── API.md                   # API documentation
-│   ├── SETUP.md                 # Setup guide
-│   └── MODELS.md                # ML model documentation
-│
+│   └── main.py
+├── .github/workflows/
+├── docs/
 ├── docker-compose.yml
-├── Dockerfile
-├── .gitignore
-├── LICENSE
 └── README.md
 \`\`\`
 
 ---
 
-## 🔌 API Endpoints
+## API Endpoints
 
 ### Authentication
-
-\`\`\`
-POST   /api/auth/register        # Register new user
-POST   /api/auth/login           # User login
-POST   /api/auth/logout          # User logout
-GET    /api/auth/verify          # Verify token
-\`\`\`
+- \`POST /api/auth/register\` - Register new user
+- \`POST /api/auth/login\` - User login
+- \`POST /api/auth/logout\` - User logout
+- \`GET /api/auth/verify\` - Verify token
 
 ### Assessments
-
-\`\`\`
-GET    /api/assessments          # List user assessments
-POST   /api/assessments          # Create new assessment
-GET    /api/assessments/{id}     # Get assessment details
-PUT    /api/assessments/{id}     # Update assessment
-DELETE /api/assessments/{id}     # Delete assessment
-\`\`\`
+- \`GET /api/assessments\` - List assessments
+- \`POST /api/assessments\` - Create assessment
+- \`GET /api/assessments/{id}\` - Get details
+- \`PUT /api/assessments/{id}\` - Update
+- \`DELETE /api/assessments/{id}\` - Delete
 
 ### Risk Prediction
-
-\`\`\`
-POST   /api/predict/risk         # Generate risk assessment
-GET    /api/predict/history      # Prediction history
-GET    /api/predict/trends       # Risk trends over time
-\`\`\`
+- \`POST /api/predict/risk\` - Generate risk assessment
+- \`GET /api/predict/history\` - Prediction history
+- \`GET /api/predict/trends\` - Risk trends
 
 ### Metrics
-
-\`\`\`
-GET    /api/metrics/overview     # System metrics
-GET    /api/metrics/model        # Model performance
-GET    /api/metrics/health       # Service health
-\`\`\`
-
-See [API Documentation](docs/API.md) for full details.
+- \`GET /api/metrics/overview\` - System metrics
+- \`GET /api/metrics/model\` - Model performance
+- \`GET /api/metrics/health\` - Service health
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Please follow these guidelines:
+Contributions welcome! Please:
 
-1. **Fork** the repository
-2. **Create** a feature branch (\`git checkout -b feature/amazing-feature\`)
-3. **Commit** your changes (\`git commit -m 'Add amazing feature'\`)
-4. **Push** to the branch (\`git push origin feature/amazing-feature\`)
-5. **Open** a Pull Request
+1. Fork the repository
+2. Create a feature branch (\`git checkout -b feature/amazing-feature\`)
+3. Commit changes (\`git commit -m 'Add feature'\`)
+4. Push to branch (\`git push origin feature/amazing-feature\`)
+5. Open a Pull Request
 
-### Development Guidelines
-
-- Follow PEP 8 for Python code
-- Use TypeScript for frontend code
+### Guidelines
+- Follow PEP 8 for Python
+- Use TypeScript for frontend
 - Write tests for new features
 - Keep commits atomic and descriptive
-- Update documentation as needed
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction.
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## 📞 Contact & Support
+## Contact & Support
 
 - **GitHub Issues**: [Report bugs](https://github.com/your-username/REMInsight/issues)
-- **Discussions**: [Join our community](https://github.com/your-username/REMInsight/discussions)
+- **Discussions**: [Join community](https://github.com/your-username/REMInsight/discussions)
 - **Email**: support@reminsight.com
-- **Website**: [reminsight.com](${demoUrl})
+- **Website**: [Visit Demo](${demoUrl})
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-- Built with ❤️ for advancing psychiatric research through AI
-- Promoting proactive mental health monitoring
-- Thanks to all contributors and researchers
-- © 2025 REMInsight Team
+Built with passion for advancing psychiatric research through AI. Promoting proactive mental health monitoring.
 
----
+**© 2025 REMInsight Team** | Made with care for mental health innovation
 
-<div align="center">
-
-**[⬆ back to top](#${title.toLowerCase().replace(/\s+/g, '-')})**
-
-Made with ❤️ by the REMInsight Team
-
-</div>
 `;
   }
 
@@ -1472,5 +1325,5 @@ Made with ❤️ by the REMInsight Team
   const mdOutput = document.getElementById('markdown-output');
   if (mdOutput) mdOutput.textContent = generateMarkdown(defaultConfig);
 </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f5cedef262a2ffb',t:'MTc3Nzc4NjgxMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f5cf0ee857217b4',t:'MTc3Nzc4NjkzMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
