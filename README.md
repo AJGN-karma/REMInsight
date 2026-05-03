@@ -177,8 +177,8 @@ REMInsight/
 
 ## 📬 Contact
 
-**Your Name**
-📧 [your-email@example.com](mailto:your-email@example.com)
+**JEEVAN**
+📧 [ajgn232232@gmail.com](mailto:your-email@example.com)
 🔗 LinkedIn / GitHub
 
 ---
