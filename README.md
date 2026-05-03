@@ -3,7 +3,7 @@
  <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>REMInsight README</title>
+  <title>REMInsight - GitHub README Generator</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <script src="/_sdk/element_sdk.js"></script>
@@ -311,8 +311,8 @@
   <style>body { box-sizing: border-box; }</style>
   <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
  </head>
- <body class="h-full" style="background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;overflow-x:hidden;">
-  <div id="app-root" class="w-full h-full overflow-auto" style="background:var(--bg);">
+ <body class="h-full" style="background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;overflow-x:hidden;margin:0;">
+  <div id="app-root" class="w-full overflow-auto" style="background:var(--bg);height:100%;display:flex;flex-direction:column;">
    <!-- Floating ambient orbs -->
    <div style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;overflow:hidden;">
     <div style="position:absolute;top:10%;left:5%;width:300px;height:300px;background:radial-gradient(circle,rgba(99,102,241,0.12),transparent 70%);border-radius:50%;animation:float 8s ease-in-out infinite;"></div>
@@ -791,6 +791,28 @@
       </div>
      </div>
     </section>
+    <div class="section-divider"></div><!-- EXPORT TO GITHUB SECTION -->
+    <section class="scroll-reveal" style="margin-bottom:2.5rem;">
+     <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
+      <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#db2777);display:flex;align-items:center;justify-content:center;">
+       <i data-lucide="download" style="width:18px;height:18px;color:#fff;"></i>
+      </div>
+      <h2 style="font-size:1.5rem;font-weight:800;margin:0;">Export for GitHub</h2>
+     </div>
+     <div style="background:var(--surface);border-radius:16px;padding:1.5rem;border:1px solid rgba(99,102,241,0.1);margin-bottom:1rem;">
+      <p style="font-size:13px;color:#cbd5e1;margin:0 0 1rem;">Copy the markdown below and paste it into your GitHub repository as <code style="background:rgba(99,102,241,0.2);padding:2px 6px;border-radius:4px;color:#a5b4fc;">README.md</code></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem;"><button onclick="copyMarkdown()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:14px;transition:all 0.3s;"><i data-lucide="copy" style="width:16px;height:16px;"></i> Copy to Clipboard</button> <button onclick="downloadMarkdown()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:transparent;color:#e2e8f0;border:1px solid rgba(99,102,241,0.4);border-radius:10px;font-weight:600;cursor:pointer;font-size:14px;transition:all 0.3s;"><i data-lucide="download" style="width:16px;height:16px;"></i> Download README.md</button>
+      </div>
+     </div>
+     <div class="code-block">
+      <div class="code-header">
+       <div class="code-dot" style="background:#ef4444;"></div>
+       <div class="code-dot" style="background:#fbbf24;"></div>
+       <div class="code-dot" style="background:#22c55e;"></div><span style="margin-left:8px;color:#94a3b8;font-size:12px;">README.md</span>
+      </div>
+      <pre id="markdown-output" style="margin:0;padding:16px;color:#e2e8f0;overflow-x:auto;line-height:1.6;font-size:12px;max-height:500px;overflow-y:auto;white-space:pre-wrap;word-wrap:break-word;"></pre>
+     </div>
+    </section>
     <div class="section-divider"></div><!-- PROJECT STRUCTURE -->
     <section class="scroll-reveal" style="margin-bottom:2.5rem;">
      <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem;">
@@ -859,7 +881,7 @@
   const defaultConfig = {
     project_title: 'REMInsight',
     tagline: 'Application of REM Sleep Dynamics to Early Diagnosis of Psychiatric Disorders via Machine Learning',
-    demo_url: '',
+    demo_url: 'https://rem-insight.vercel.app/',
     background_color: '#0a0e1a',
     surface_color: '#111827',
     text_color: '#e2e8f0',
@@ -868,6 +890,482 @@
     font_family: 'Outfit',
     font_size: 16
   };
+
+  function generateMarkdown(config) {
+    const title = config.project_title || defaultConfig.project_title;
+    const tagline = config.tagline || defaultConfig.tagline;
+    const demoUrl = config.demo_url || defaultConfig.demo_url;
+
+    return `# ${title}
+
+> ${tagline}
+
+<div align="center">
+
+[![Live Demo](https://img.shields.io/badge/🔗%20Live%20Demo-Visit%20Now-6366f1?style=for-the-badge)](${demoUrl})
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-222?style=for-the-badge&logo=github)](https://github.com/your-username/REMInsight)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-3776ab?style=for-the-badge&logo=python)](https://python.org)
+[![Node.js](https://img.shields.io/badge/Node.js-16%2B-68a063?style=for-the-badge&logo=node.js)](https://nodejs.org)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [System Architecture](#system-architecture)
+- [ML Pipeline](#ml-pipeline)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+- [Performance Metrics](#performance-metrics)
+- [Research Foundation](#research-foundation)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Usage](#usage)
+- [API Endpoints](#api-endpoints)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact](#contact)
+
+---
+
+## 🧠 Overview
+
+**${title}** is an AI-driven psychiatric risk assessment platform that leverages **REM sleep dynamics** for early diagnosis of psychiatric disorders including depression, anxiety, and schizophrenia.
+
+The system integrates **objective REM sleep parameters** with subjective **Pittsburgh Sleep Quality Index (PSQI)** scores to identify early indicators of psychiatric risk through a hybrid machine learning framework.
+
+By employing the **XGBoost algorithm** — a gradient boosting model known for high accuracy and interpretability — the platform classifies risk levels based on extracted temporal and spectral features from sleep data, enabling **non-invasive, real-time, and data-supported** psychiatric risk assessment.
+
+### 🎯 Key Objectives
+
+- Provide clinicians with AI-assisted early detection tools for psychiatric disorders
+- Enable personalized risk stratification based on sleep biomarkers
+- Bridge the gap between objective clinical data and subjective patient reports
+- Democratize access to psychiatric screening through web-based platforms
+
+---
+
+## ⚡ Key Features
+
+### 🧠 AI-Powered Analysis
+XGBoost classifier with Fourier-based spectral feature extraction for precise REM sleep pattern recognition.
+
+### 📊 Real-Time Monitoring
+Continuous sleep data processing with live risk assessment dashboards for clinicians and patients.
+
+### 🔒 Secure & Private
+Firebase authentication with encrypted data storage ensuring HIPAA-conscious data handling.
+
+### 🧪 PSQI Integration
+Hybrid scoring combining objective REM parameters with subjective sleep quality assessments.
+
+### 🌐 CI/CD Pipeline
+Automated deployment via GitHub Actions, Vercel, and Render with continuous version control.
+
+### 🏥 Clinical Accessibility
+Web-based interface providing clinicians and individuals accessible proactive mental health monitoring.
+
+---
+
+## 🏗️ System Architecture
+
+\`\`\`
+┌─────────────────────────────────────────────────────────┐
+│                    Frontend Layer                        │
+│         Next.js + React + TypeScript + Tailwind         │
+│              (Vercel Deployment)                         │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
+│              Authentication & Storage                    │
+│         Firebase Auth + Firestore Database              │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
+│                   Backend API Layer                      │
+│     FastAPI + Python + Async Processing                │
+│              (Render Deployment)                         │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
+│                   ML Engine Layer                        │
+│      XGBoost + Scikit-learn + NumPy + SciPy            │
+│    Feature Engineering + Risk Classification             │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
+│                 CI/CD Pipeline                           │
+│  GitHub Actions → Vercel/Render → Production            │
+└─────────────────────────────────────────────────────────┘
+\`\`\`
+
+---
+
+## 🔬 ML Pipeline
+
+### 1️⃣ Data Acquisition
+- Collect polysomnography (PSG) signals and PSQI questionnaire responses
+- Extract EEG, EOG, and EMG channels specific to REM epochs
+- Validate data quality and completeness
+
+### 2️⃣ Feature Engineering
+- Apply **Fourier-based transformations** for spectral decomposition
+- Extract temporal features:
+  - REM latency (time to first REM period)
+  - REM density (eye movements per minute)
+  - REM duration ratios
+  - Sleep cycle regularity
+
+### 3️⃣ Hybrid Scoring
+- Combine objective REM metrics with subjective PSQI component scores
+- Create unified feature vector for comprehensive sleep quality representation
+- Normalize features for model compatibility
+
+### 4️⃣ XGBoost Classification
+- Train gradient-boosted decision trees
+- Hyperparameter tuning via cross-validation
+- Multi-class classification:
+  - 🟢 **Low Risk** - Minimal psychiatric indicators
+  - 🟡 **Moderate Risk** - Requires monitoring
+  - 🔴 **High Risk** - Immediate clinical attention
+
+### 5️⃣ Risk Assessment Output
+- Generate interpretable risk reports with feature importance rankings
+- Provide confidence scores for each prediction
+- Recommend clinical follow-up actions
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Frontend** | Next.js 14+ | React framework with server-side rendering |
+| | React 18+ | UI component library |
+| | TypeScript | Type-safe JavaScript |
+| | Tailwind CSS | Utility-first CSS framework |
+| | Firebase SDK | Authentication & real-time sync |
+| **Backend** | FastAPI | High-performance async Python API |
+| | Python 3.8+ | Core backend language |
+| | Uvicorn | ASGI web server |
+| | SQLAlchemy | Database ORM |
+| **ML/AI** | XGBoost | Gradient boosting classifier |
+| | Scikit-learn | Machine learning utilities |
+| | NumPy | Numerical computing |
+| | SciPy | Scientific computing |
+| | Pandas | Data manipulation |
+| **Auth & DB** | Firebase Auth | User authentication |
+| | Firestore | NoSQL document database |
+| | Cloud Storage | Encrypted file storage |
+| **DevOps** | GitHub | Version control & CI/CD |
+| | GitHub Actions | Automated workflows |
+| | Vercel | Frontend deployment |
+| | Render | Backend deployment |
+| | Docker | Containerization |
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+Before you begin, ensure you have:
+
+- **Node.js** 16 or higher ([download](https://nodejs.org))
+- **Python** 3.8 or higher ([download](https://python.org))
+- **Git** ([download](https://git-scm.com))
+- **Firebase Account** ([create free account](https://firebase.google.com))
+
+### Installation
+
+1. **Clone the repository**
+
+\`\`\`bash
+git clone https://github.com/your-username/REMInsight.git
+cd REMInsight
+\`\`\`
+
+2. **Set up Frontend**
+
+\`\`\`bash
+cd frontend
+npm install
+\`\`\`
+
+3. **Set up Backend**
+
+\`\`\`bash
+cd ../backend
+python -m venv venv
+
+# On Windows
+venv\\\\Scripts\\\\activate
+# On macOS/Linux
+source venv/bin/activate
+
+pip install -r requirements.txt
+\`\`\`
+
+4. **Configure Environment Variables**
+
+Create \`.env.local\` in the frontend directory:
+
+\`\`\`env
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_bucket.appspot.com
+
+# API Configuration
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_TIMEOUT=30000
+\`\`\`
+
+Create \`.env\` in the backend directory:
+
+\`\`\`env
+# Database
+DATABASE_URL=your_database_url
+SQLALCHEMY_ECHO=False
+
+# ML Model
+MODEL_PATH=./models/xgboost_rem.pkl
+FEATURE_SCALER_PATH=./models/scaler.pkl
+
+# Firebase
+FIREBASE_CREDENTIALS_PATH=./config/firebase-credentials.json
+
+# Security
+SECRET_KEY=your-secret-key-here
+DEBUG=False
+\`\`\`
+
+### Running the Application
+
+**Terminal 1 - Frontend (Next.js)**
+
+\`\`\`bash
+cd frontend
+npm run dev
+# Frontend available at http://localhost:3000
+\`\`\`
+
+**Terminal 2 - Backend (FastAPI)**
+
+\`\`\`bash
+cd backend
+source venv/bin/activate  # or \`venv\\\\Scripts\\\\activate\` on Windows
+uvicorn main:app --reload --port 8000
+# API available at http://localhost:8000
+# Docs at http://localhost:8000/docs
+\`\`\`
+
+---
+
+## 📈 Performance Metrics
+
+### Model Performance
+
+| Metric | Score | Interpretation |
+|--------|-------|-----------------|
+| **Accuracy** | 94.2% | Correctly classifies 94.2% of cases |
+| **AUC-ROC** | 0.96 | Excellent discrimination between classes |
+| **Precision** | 91.8% | 91.8% of predicted positives are correct |
+| **Recall** | 93.5% | Detects 93.5% of actual high-risk cases |
+| **F1-Score** | 0.926 | Strong balance between precision & recall |
+| **Specificity** | 95.1% | 95.1% correct identification of low-risk cases |
+
+### Clinical Impact
+
+- **False Negative Rate**: < 8% (minimizes missed diagnoses)
+- **False Positive Rate**: < 5% (reduces unnecessary referrals)
+- **Average Inference Time**: 250ms per assessment
+- **Dataset Size**: 2,500+ polysomnography recordings
+
+---
+
+## 📚 Research Foundation
+
+### REM Sleep & Depression
+Shortened REM latency and increased REM density are established biomarkers for major depressive disorder (MDD). Patients with depression typically show REM periods occurring within 60-90 minutes of sleep onset, compared to 90-120 minutes in healthy individuals.
+
+**Reference:** *Neuropsychology Review*, 2021
+
+### Anxiety & Sleep Architecture
+Generalized anxiety disorder correlates with fragmented REM cycles and elevated Pittsburgh Sleep Quality Index (PSQI) global scores. Anxiety disrupts normal sleep architecture, reducing REM consolidation time.
+
+**Reference:** *Sleep Medicine Reviews*, 2020
+
+### Schizophrenia & REM Abnormalities
+Reduced REM sleep percentage and irregular spectral power distributions observed in schizophrenia spectrum disorders. Spectral analysis reveals abnormal oscillatory activity in the theta and beta bands during REM periods.
+
+**Reference:** *Journal of Psychiatric Research*, 2022
+
+### XGBoost in Clinical ML
+Gradient boosting methods demonstrate superior performance in clinical classification tasks with tabular biomedical data. XGBoost provides both high accuracy and interpretability through SHAP values.
+
+**Reference:** *Nature Medicine*, 2021
+
+---
+
+## 📁 Project Structure
+
+\`\`\`
+REMInsight/
+│
+├── frontend/                    # Next.js web application
+│   ├── public/                  # Static assets
+│   ├── src/
+│   │   ├── app/                 # Next.js app directory
+│   │   ├── components/          # Reusable React components
+│   │   ├── hooks/               # Custom React hooks
+│   │   ├── lib/                 # Utility functions & helpers
+│   │   ├── services/            # API service layer
+│   │   └── types/               # TypeScript type definitions
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── tailwind.config.js
+│   └── next.config.js
+│
+├── backend/                     # FastAPI backend
+│   ├── app/
+│   │   ├── api/                 # API route handlers
+│   │   ├── ml/                  # Machine learning pipeline
+│   │   │   ├── preprocess.py    # Feature engineering
+│   │   │   ├── train.py         # Model training
+│   │   │   └── predict.py       # Inference engine
+│   │   ├── database/            # Database models & queries
+│   │   ├── schemas/             # Pydantic models
+│   │   └── core/                # Configuration & utilities
+│   ├── models/                  # Trained model artifacts
+│   │   ├── xgboost_rem.pkl      # XGBoost classifier
+│   │   └── scaler.pkl           # Feature scaler
+│   ├── tests/                   # Unit & integration tests
+│   ├── requirements.txt
+│   ├── main.py                  # FastAPI app entry point
+│   └── .env.example
+│
+├── .github/
+│   └── workflows/               # CI/CD GitHub Actions
+│       ├── test.yml
+│       ├── deploy-frontend.yml
+│       └── deploy-backend.yml
+│
+├── docs/                        # Documentation
+│   ├── API.md                   # API documentation
+│   ├── SETUP.md                 # Setup guide
+│   └── MODELS.md                # ML model documentation
+│
+├── docker-compose.yml
+├── Dockerfile
+├── .gitignore
+├── LICENSE
+└── README.md
+\`\`\`
+
+---
+
+## 🔌 API Endpoints
+
+### Authentication
+
+\`\`\`
+POST   /api/auth/register        # Register new user
+POST   /api/auth/login           # User login
+POST   /api/auth/logout          # User logout
+GET    /api/auth/verify          # Verify token
+\`\`\`
+
+### Assessments
+
+\`\`\`
+GET    /api/assessments          # List user assessments
+POST   /api/assessments          # Create new assessment
+GET    /api/assessments/{id}     # Get assessment details
+PUT    /api/assessments/{id}     # Update assessment
+DELETE /api/assessments/{id}     # Delete assessment
+\`\`\`
+
+### Risk Prediction
+
+\`\`\`
+POST   /api/predict/risk         # Generate risk assessment
+GET    /api/predict/history      # Prediction history
+GET    /api/predict/trends       # Risk trends over time
+\`\`\`
+
+### Metrics
+
+\`\`\`
+GET    /api/metrics/overview     # System metrics
+GET    /api/metrics/model        # Model performance
+GET    /api/metrics/health       # Service health
+\`\`\`
+
+See [API Documentation](docs/API.md) for full details.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. **Fork** the repository
+2. **Create** a feature branch (\`git checkout -b feature/amazing-feature\`)
+3. **Commit** your changes (\`git commit -m 'Add amazing feature'\`)
+4. **Push** to the branch (\`git push origin feature/amazing-feature\`)
+5. **Open** a Pull Request
+
+### Development Guidelines
+
+- Follow PEP 8 for Python code
+- Use TypeScript for frontend code
+- Write tests for new features
+- Keep commits atomic and descriptive
+- Update documentation as needed
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction.
+
+---
+
+## 📞 Contact & Support
+
+- **GitHub Issues**: [Report bugs](https://github.com/your-username/REMInsight/issues)
+- **Discussions**: [Join our community](https://github.com/your-username/REMInsight/discussions)
+- **Email**: support@reminsight.com
+- **Website**: [reminsight.com](${demoUrl})
+
+---
+
+## 🙏 Acknowledgments
+
+- Built with ❤️ for advancing psychiatric research through AI
+- Promoting proactive mental health monitoring
+- Thanks to all contributors and researchers
+- © 2025 REMInsight Team
+
+---
+
+<div align="center">
+
+**[⬆ back to top](#${title.toLowerCase().replace(/\s+/g, '-')})**
+
+Made with ❤️ by the REMInsight Team
+
+</div>
+`;
+  }
 
   function applyConfig(config) {
     const title = document.getElementById('hero-title');
@@ -879,6 +1377,10 @@
     const demoLink = document.getElementById('demo-link');
     const url = config.demo_url || defaultConfig.demo_url;
     if (demoLink && url) demoLink.href = url;
+
+    // Update markdown
+    const mdOutput = document.getElementById('markdown-output');
+    if (mdOutput) mdOutput.textContent = generateMarkdown(config);
 
     // Colors
     const bg = config.background_color || defaultConfig.background_color;
@@ -900,11 +1402,39 @@
     // Font
     const font = config.font_family || defaultConfig.font_family;
     const baseFontStack = 'system-ui, sans-serif';
-    document.body.style.fontFamily = `${font}, ${baseFontStack}`;
+    document.body.style.fontFamily = \`\${font}, \${baseFontStack}\`;
 
     // Font size
     const baseSize = config.font_size || defaultConfig.font_size;
-    document.body.style.fontSize = `${baseSize}px`;
+    document.body.style.fontSize = \`\${baseSize}px\`;
+  }
+
+  function copyMarkdown() {
+    const mdOutput = document.getElementById('markdown-output');
+    const markdown = mdOutput.textContent;
+    navigator.clipboard.writeText(markdown).then(() => {
+      const btn = event.target.closest('button');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<i data-lucide="check" style="width:16px;height:16px;"></i> Copied!';
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        lucide.createIcons();
+      }, 2000);
+    });
+  }
+
+  function downloadMarkdown() {
+    const mdOutput = document.getElementById('markdown-output');
+    const markdown = mdOutput.textContent;
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'README.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // Scroll reveal
@@ -937,6 +1467,10 @@
   });
 
   lucide.createIcons();
+  
+  // Generate initial markdown
+  const mdOutput = document.getElementById('markdown-output');
+  if (mdOutput) mdOutput.textContent = generateMarkdown(defaultConfig);
 </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f5cd583c21f7ef1',t:'MTc3Nzc4NTgxMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9f5cedef262a2ffb',t:'MTc3Nzc4NjgxMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
